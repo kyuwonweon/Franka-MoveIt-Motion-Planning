@@ -1,3 +1,3 @@
-# {Repo Name}
+# Homework 3 Part 2
 
-Author: Conor Hayes
+Authors: Conor Hayes, Kyuwon Weon, Amber Handal, Tianhao Zhang
