@@ -10,22 +10,18 @@ from moveit_msgs.msg import MotionPlanRequest, RobotState, Constraints
 from moveit_msgs.srv import GetCartesianPath_Response
 
 
-class Motion_Planner(Node):
+class MotionPlanner:
     """Briefly describes the motion planner class."""
 
-    def __init__(self):
+    def __init__(self, node: Node):
         """Initialize the motion planner node."""
-        super().__init__('motion_planner')
+        self._node = node
         self._cbgroup = MutuallyExclusiveCallbackGroup()
-        # self.joint_config_server = ActionServer(self,
-        #                             MoveGroup,
-        #                             '/viz/move_joint_config',
-        #                             self.move_joint_config_cb,
-        #                             callback_group = self._cbgroup)
         self._client = ActionClient(
-            self, MoveGroup, '/move_action', callback_group=self._cbgroup
+            node, MoveGroup, '/move_action', callback_group=self._cbgroup
         )
-        self.get_logger().info('Motion_Planner Started. Waiting for goal')
+        self._logger = node.get_logger()
+        self._logger.info('Motion_Planner Started. Waiting for goal')
 
     async def move_to_ee_pose(
         self,
@@ -79,26 +75,23 @@ class Motion_Planner(Node):
 
         request.goal_constraints = self.joint_constraints(goal_joints)
         goal_msg.request = request
-        self.get_logger().info('Sending goal to /move_action...')
+        self._logger.info('Sending goal to /move_action...')
         response_goal_handle = await self._client.send_goal_async(goal_msg)
-        self.get_logger().info(
+        self._logger.info(
             f'Received response goal handle: {response_goal_handle.accepted}'
         )
-        self.get_logger().info('Awaiting the result')
+        self._logger.info('Awaiting the result')
         response = await response_goal_handle.get_result_async()
-        self.get_logger().info(
+        self._logger.info(
             f'Received the result: {response}'
         )  # Do more formatting
         response_goal_handle.succeed()
-        self.get_logger().info('Returning the result')
+        self._logger.info('Returning the result')
 
         return response.result
 
     def plan_cartesian_path(
-        self,
-        goal_ee_pose: np.ndarray,
-        start_ee_pose: np.ndarray | None = None,
-        execute_immediately: bool = False,
+        self, goal_ee_pose: np.ndarray, start_ee_pose: np.ndarray | None = None
     ) -> GetCartesianPath_Response:
         """
         Plan a Cartesian path from any valid starting pose to a goal pose.
@@ -155,8 +148,16 @@ class Motion_Planner(Node):
 def main(args=None):
     """Spin the node."""
     rclpy.init()
-    node = Motion_Planner()
+    node = Node('moplan_test')
+
+    plan = MotionPlanner(node)
+
+    pos1 = np.array([0, 0, 0, 0, 0, 0])
+    pos2 = np.array([1, 1, 1, 1, 1])
+    _ = plan.move_to_joint_target(goal_joints=pos2, start_joints=pos1)
+
     rclpy.spin(node)
+
     node.destroy_node()
     rclpy.shutdown()
 
