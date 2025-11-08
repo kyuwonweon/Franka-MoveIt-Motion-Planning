@@ -1,11 +1,13 @@
 """Plan motion of the robot."""
 
+import numpy as np
 import rclpy
 from rclpy.node import Node
 from rclpy.action import ActionClient
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from moveit_msgs.action import MoveGroup
 from moveit_msgs.msg import MotionPlanRequest, RobotState, Constraints
+from moveit_msgs.srv import GetCartesianPath_Response
 
 
 class Motion_Planner(Node):
@@ -15,21 +17,60 @@ class Motion_Planner(Node):
         """Initialize the motion planner node."""
         super().__init__('motion_planner')
         self._cbgroup = MutuallyExclusiveCallbackGroup()
-        """
-        self.joint_config_server = ActionServer(self,
-                                    MoveGroup,
-                                    '/viz/move_joint_config',
-                                    self.move_joint_config_cb,
-                                    callback_group = self._cbgroup)
-        """
+        # self.joint_config_server = ActionServer(self,
+        #                             MoveGroup,
+        #                             '/viz/move_joint_config',
+        #                             self.move_joint_config_cb,
+        #                             callback_group = self._cbgroup)
         self._client = ActionClient(
             self, MoveGroup, '/move_action', callback_group=self._cbgroup
         )
         self.get_logger().info('Motion_Planner Started. Waiting for goal')
 
-    async def move_to_joint_target(self, goal_joints, start_joints):
-        """Plan a path from any valid starting joint configuration."""
-        goal_msg = MoveGroup.Goal()
+    async def move_to_ee_pose(
+        self,
+        goal_ee_position: np.ndarray | None,
+        goal_ee_orientation: np.ndarray | None,
+        start_ee_pose: np.ndarray | None = None,
+        execute_immediately: bool = False,
+    ) -> None:
+        """
+        Move from a specified end-effector configuration to another.
+
+        Args:
+            goal_ee_position (np.ndarray): end EE position [x,y,z]. If not
+            specified, any position is allowed such that the given orientation
+            is achieved.
+            goal_ee_orientation (np.ndarray): end EE position [r,p,y]. If not
+            specified, any orientation is allowed such that the given position
+            is achieved.
+            start_ee_pose (np.ndarray): start EE position & orientation;
+            [x,y,z,r,p,y]. If not given, use current robot pose as start.
+            execute_immediately (bool): immediately execute the path
+
+        """
+        if goal_ee_orientation is None and goal_ee_position is None:
+            raise ValueError(
+                'One of orientation and position must be specified.'
+            )
+
+    async def move_to_joint_target(
+        self,
+        goal_joints: np.ndarray,
+        start_joints: np.ndarray | None = None,
+        execute_immediately: bool = False,
+    ) -> None:
+        """
+        Move from a specified configuration in joint space to another.
+
+        Args:
+            start_joints (np.ndarray): array of joint angles for each joint.
+            If not given, use current robot pose as start.
+            goal_joints (np.ndarray): array of joint angles for each joint
+            execute_immediately (bool): immediately execute the path
+
+        """
+        goal_msg = MoveGroup.Goal()  # type: ignore
 
         request = MotionPlanRequest()
 
@@ -52,6 +93,55 @@ class Motion_Planner(Node):
         self.get_logger().info('Returning the result')
 
         return response.result
+
+    def plan_cartesian_path(
+        self,
+        goal_ee_pose: np.ndarray,
+        start_ee_pose: np.ndarray | None = None,
+        execute_immediately: bool = False,
+    ) -> GetCartesianPath_Response:
+        """
+        Plan a Cartesian path from any valid starting pose to a goal pose.
+
+        Uses moveit_msgs/GetCartesianPath Service
+
+        Args:
+            goal_ee_pose (np.ndarray): destination pose [x,y,z,r,p,y]
+            start_ee_pose (np.ndarray): start pose [x,y,z,r,p,y].
+            If not provided, use current robot pose as start pose.
+            execute_immediately (bool): immediately execute the path
+
+        Returns:
+            GetCartesianPath_Response: response of moveit GetCartesianPath srv
+
+        """
+        raise NotImplementedError
+
+    def plan_to_named_config(
+        self,
+        named_config: str,
+        start_ee_pose: np.ndarray | None = None,
+        execute_immediately: bool = False,
+    ) -> GetCartesianPath_Response:
+        """
+        Plan a path from any valid starting pose to a named configuration.
+
+        This "named configuration" can be defined in an SRDF or a remembered
+        from a previous call to moveit python library's remember_joint_values()
+        method, per docs here:
+        https://docs.ros.org/en/jade/api/moveit_commander/html/classmoveit__commander_1_1move__group_1_1MoveGroupCommander.html#af9c9fc79be7fee5c366102db427fb28b
+
+        Args:
+            named_config (str): Named configuration
+            start_ee_pose (np.ndarray, optional): start pose; if None, use
+                current robot pose.
+            execute_immediately (bool): immediately execute the path
+
+        Returns:
+            GetCartesianPath_Response: TODO figure out
+
+        """
+        raise NotImplementedError
 
     def start_state(self, joints):
         """Set start state."""
