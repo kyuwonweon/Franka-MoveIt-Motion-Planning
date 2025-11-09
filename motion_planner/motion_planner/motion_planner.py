@@ -17,7 +17,7 @@ class MotionPlanner:
         """Initialize the motion planner node."""
         self._node = node
         self._cbgroup = MutuallyExclusiveCallbackGroup()
-        self._client = ActionClient(
+        self._c_move_group = ActionClient(
             node, MoveGroup, '/move_action', callback_group=self._cbgroup
         )
         self._logger = node.get_logger()
@@ -76,7 +76,9 @@ class MotionPlanner:
         request.goal_constraints = self.joint_constraints(goal_joints)
         goal_msg.request = request
         self._logger.info('Sending goal to /move_action...')
-        response_goal_handle = await self._client.send_goal_async(goal_msg)
+        response_goal_handle = await self._c_move_group.send_goal_async(
+            goal_msg
+        )
         self._logger.info(
             f'Received response goal handle: {response_goal_handle.accepted}'
         )
@@ -135,6 +137,10 @@ class MotionPlanner:
 
         """
         raise NotImplementedError
+
+    def list_named_configs(self) -> list[str]:
+        """Return a list of the named configs currently registered."""
+        return []
 
     def start_state(self, joints):
         """Set start state."""

@@ -37,7 +37,7 @@ setup(
     entry_points={
         'console_scripts': [
             'motion_planner_integration_test = '
-            'motion_planner.motion_planner:integration_test'
+            'motion_planner.motion_planner:main'
         ],
     },
 )
