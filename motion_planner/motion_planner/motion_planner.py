@@ -6,7 +6,13 @@ from rclpy.node import Node
 from rclpy.action import ActionClient
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from moveit_msgs.action import MoveGroup
-from moveit_msgs.msg import MotionPlanRequest, RobotState, Constraints
+from moveit_msgs.msg import (
+    MotionPlanRequest,
+    RobotState,
+    Constraints,
+    PositionConstraint,
+    OrientationConstraint,
+)
 from moveit_msgs.srv import GetCartesianPath_Response
 
 
@@ -37,18 +43,54 @@ class MotionPlanner:
             goal_ee_position (np.ndarray): end EE position [x,y,z]. If not
             specified, any position is allowed such that the given orientation
             is achieved.
-            goal_ee_orientation (np.ndarray): end EE position [r,p,y]. If not
-            specified, any orientation is allowed such that the given position
-            is achieved.
-            start_ee_pose (np.ndarray): start EE position & orientation;
-            [x,y,z,r,p,y]. If not given, use current robot pose as start.
-            execute_immediately (bool): immediately execute the path
+            goal_ee_orientation (np.ndarray): end EE position [x,y,z,w]-
+            quaternion.If not specified, any orientation is allowed such that
+            the given position is achieved.
+            start_ee_pose (list[float]): start EE position & orientation;
+            [x,y,z,x,y,z,w]. If not given, use current robot pose as start.
+            execute_immediately (bool): immediately execute the pat
 
         """
         if goal_ee_orientation is None and goal_ee_position is None:
             raise ValueError(
                 'One of orientation and position must be specified.'
             )
+        goal_msg = MoveGroup.Goal()
+        request = MotionPlanRequest()
+        goal_constraint = Constraints()
+
+        if goal_ee_position is not None:
+            pos_constraint = PositionConstraint()
+            pos_constraint.target_point_offset.x = goal_ee_position[0]
+            pos_constraint.target_point_offset.y = goal_ee_position[1]
+            pos_constraint.target_point_offset.z = goal_ee_position[2]
+            goal_constraint.position_constraints.append(pos_constraint)
+        if goal_ee_orientation is not None:
+            orient_constraint = OrientationConstraint()
+            orient_constraint.orientation.x = goal_ee_orientation[0]
+            orient_constraint.orientation.y = goal_ee_orientation[1]
+            orient_constraint.orientation.z = goal_ee_orientation[2]
+            orient_constraint.orientation.w = goal_ee_orientation[3]
+            goal_constraint.orientation_constraints.append(orient_constraint)
+
+        request.goal_constraints = [goal_constraint]
+        goal_msg.request = request
+        planning_options = MoveGroup.PlanningOptions()
+        planning_options.plan_only = not execute_immediately
+        goal_msg.planning_options = planning_options
+
+        self._logger.info('Sending goal to /move_action...')
+        response_goal_handle = await self._c_move_group.send_goal_async(
+            goal_msg
+        )
+        self._logger.info(
+            f'Received response goal handle: {response_goal_handle.accepted}'
+        )
+        self._logger.info('Awaiting the result')
+        response = await response_goal_handle.get_result_async()
+        self._logger.info(f'Received the result: {response}')
+        response_goal_handle.succeed()
+        self._logger.info('Returning the result')
 
     async def move_to_joint_target(
         self,
@@ -66,8 +108,7 @@ class MotionPlanner:
             execute_immediately (bool): immediately execute the path
 
         """
-        goal_msg = MoveGroup.Goal()  # type: ignore
-
+        goal_msg = MoveGroup.Goal()
         request = MotionPlanRequest()
 
         if start_joints is not None:
@@ -75,6 +116,10 @@ class MotionPlanner:
 
         request.goal_constraints = self.joint_constraints(goal_joints)
         goal_msg.request = request
+        planning_options = MoveGroup.PlanningOptions()
+        planning_options.plan_only = not execute_immediately
+        goal_msg.planning_options = planning_options
+
         self._logger.info('Sending goal to /move_action...')
         response_goal_handle = await self._c_move_group.send_goal_async(
             goal_msg
@@ -84,9 +129,7 @@ class MotionPlanner:
         )
         self._logger.info('Awaiting the result')
         response = await response_goal_handle.get_result_async()
-        self._logger.info(
-            f'Received the result: {response}'
-        )  # Do more formatting
+        self._logger.info(f'Received the result: {response}')
         response_goal_handle.succeed()
         self._logger.info('Returning the result')
 
