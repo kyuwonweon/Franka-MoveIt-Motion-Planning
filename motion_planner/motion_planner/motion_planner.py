@@ -27,7 +27,7 @@ class MotionPlanner:
         self._c_move_group = ActionClient(
             node, MoveGroup, '/move_action', callback_group=self._cbgroup
         )
-        self._c_cartesian_path = self.create_client(
+        self._c_cartesian_path = self._node.create_client(
             GetCartesianPath, 'cartesian_path', callback_group=self._cbgroup
         )
         self._logger = node.get_logger()
@@ -84,7 +84,7 @@ class MotionPlanner:
         goal_msg.planning_options = planning_options
 
         self._logger.info('Sending goal to /move_action...')
-        response_goal = await self._s_cartesian_path.call_async(goal_msg)
+        response_goal = await self._c_move_group.send_goal_async(goal_msg)
         return response_goal
 
     async def move_to_joint_target(
@@ -222,7 +222,7 @@ def main(args=None):
     plan = MotionPlanner(node)
 
     pos1 = np.array([0, 0, 0, 0, 0, 0])
-    pos2 = np.array([1, 1, 1, 1, 1])
+    pos2 = np.array([1, 1, 1, 1, 1, 1])
     _ = plan.move_to_joint_target(goal_joints=pos2, start_joints=pos1)
 
     rclpy.spin(node)
