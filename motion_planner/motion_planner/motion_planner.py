@@ -13,7 +13,8 @@ from moveit_msgs.msg import (
     PositionConstraint,
     OrientationConstraint,
 )
-from moveit_msgs.srv import GetCartesianPath_Response
+from moveit_msgs.srv import GetCartesianPath, GetCartesianPath_Response
+from geometry_msgs import Pose
 
 
 class MotionPlanner:
@@ -25,6 +26,9 @@ class MotionPlanner:
         self._cbgroup = MutuallyExclusiveCallbackGroup()
         self._c_move_group = ActionClient(
             node, MoveGroup, '/move_action', callback_group=self._cbgroup
+        )
+        self._c_cartesian_path = self.create_client(
+            GetCartesianPath, 'cartesian_path', callback_group=self._cbgroup
         )
         self._logger = node.get_logger()
         self._logger.info('Motion_Planner Started. Waiting for goal')
@@ -80,17 +84,8 @@ class MotionPlanner:
         goal_msg.planning_options = planning_options
 
         self._logger.info('Sending goal to /move_action...')
-        response_goal_handle = await self._c_move_group.send_goal_async(
-            goal_msg
-        )
-        self._logger.info(
-            f'Received response goal handle: {response_goal_handle.accepted}'
-        )
-        self._logger.info('Awaiting the result')
-        response = await response_goal_handle.get_result_async()
-        self._logger.info(f'Received the result: {response}')
-        response_goal_handle.succeed()
-        self._logger.info('Returning the result')
+        response_goal = await self._s_cartesian_path.call_async(goal_msg)
+        return response_goal
 
     async def move_to_joint_target(
         self,
@@ -135,8 +130,11 @@ class MotionPlanner:
 
         return response.result
 
-    def plan_cartesian_path(
-        self, goal_ee_pose: np.ndarray, start_ee_pose: np.ndarray | None = None
+    async def plan_cartesian_path(
+        self,
+        goal_ee_pose: np.ndarray,
+        start_ee_pose: np.ndarray | None = None,
+        execute_immediately: bool = False,
     ) -> GetCartesianPath_Response:
         """
         Plan a Cartesian path from any valid starting pose to a goal pose.
@@ -144,8 +142,8 @@ class MotionPlanner:
         Uses moveit_msgs/GetCartesianPath Service
 
         Args:
-            goal_ee_pose (np.ndarray): destination pose [x,y,z,r,p,y]
-            start_ee_pose (np.ndarray): start pose [x,y,z,r,p,y].
+            goal_ee_pose (np.ndarray): destination pose [x,y,z,x,y,z,w]
+            start_ee_pose (np.ndarray): start pose [x,y,z,x,y,z,w].
             If not provided, use current robot pose as start pose.
             execute_immediately (bool): immediately execute the path
 
@@ -153,7 +151,29 @@ class MotionPlanner:
             GetCartesianPath_Response: response of moveit GetCartesianPath srv
 
         """
-        raise NotImplementedError
+        request = GetCartesianPath.Request()
+
+        if goal_ee_pose is not None:
+            goal_pose = Pose()
+            goal_pose.position.x = goal_ee_pose[0]
+            goal_pose.position.y = goal_ee_pose[1]
+            goal_pose.position.z = goal_ee_pose[2]
+            goal_pose.orientation.x = goal_ee_pose[3]
+            goal_pose.orientation.y = goal_ee_pose[4]
+            goal_pose.orientation.z = goal_ee_pose[5]
+            goal_pose.orientation.w = goal_ee_pose[6]
+            request.waypoints = [goal_pose]
+        if start_ee_pose is not None:
+            # import inverse kinematics from robot state class
+            start_joints = self.robot_state.inversekinematics(start_ee_pose)
+            request.start_state = self.start_state(start_joints)
+        else:
+            # request.start_state = {$idk what returns robot's current state}
+            return
+        self._logger.info('Request Cartesian path from service')
+        response = await self._c_cartesian_path.call_async(request)
+
+        return response
 
     def plan_to_named_config(
         self,
