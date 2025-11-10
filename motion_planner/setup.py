@@ -31,6 +31,8 @@ setup(
         ],
     },
     entry_points={
-        'console_scripts': [],
+        'console_scripts': [
+            'planning_scene_test = motion_planner.planning_scene_test:main',
+        ],
     },
 )
