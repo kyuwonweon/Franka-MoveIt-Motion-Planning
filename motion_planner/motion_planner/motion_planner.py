@@ -14,7 +14,8 @@ from moveit_msgs.msg import (
     OrientationConstraint,
 )
 from moveit_msgs.srv import GetCartesianPath, GetCartesianPath_Response
-from geometry_msgs import Pose
+from geometry_msgs.msg import Pose
+import asyncio
 
 
 class MotionPlanner:
@@ -31,7 +32,7 @@ class MotionPlanner:
             GetCartesianPath, 'cartesian_path', callback_group=self._cbgroup
         )
         self._logger = node.get_logger()
-        self._logger.info('Motion_Planner Started. Waiting for goal')
+        self._logger.error('Motion_Planner Started. Waiting for goal')
 
     async def move_to_ee_pose(
         self,
@@ -214,21 +215,32 @@ class MotionPlanner:
         return Constraints()
 
 
-def main(args=None):
-    """Spin the node."""
+async def integration_test() -> None:
+    """Test move plan functions."""
     rclpy.init()
-    node = Node('moplan_test')
+    try:
+        node = rclpy.create_node('test_motion_planner_node')
+        planner = MotionPlanner(node)
 
-    plan = MotionPlanner(node)
+        pos1 = np.zeros(6)
+        pos2 = np.ones(6)
 
-    pos1 = np.array([0, 0, 0, 0, 0, 0])
-    pos2 = np.array([1, 1, 1, 1, 1, 1])
-    _ = plan.move_to_joint_target(goal_joints=pos2, start_joints=pos1)
+        task = asyncio.create_task(
+            planner.move_to_joint_target(
+                goal_joints=pos2, start_joints=pos1, execute_immediately=True
+            )
+        )
 
-    rclpy.spin(node)
+        result = await task
+        node.get_logger().info(f'Motion result: {result}')
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
 
-    node.destroy_node()
-    rclpy.shutdown()
+
+def main():
+    """Run main."""
+    asyncio.run(integration_test())
 
 
 if __name__ == '__main__':
