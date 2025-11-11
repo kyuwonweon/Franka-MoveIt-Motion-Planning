@@ -31,6 +31,8 @@ setup(
         ],
     },
     entry_points={
-        'console_scripts': [],
+        'console_scripts': [
+            'robot_state_test = motion_planner.robot_state_test:main',
+        ],
     },
 )
