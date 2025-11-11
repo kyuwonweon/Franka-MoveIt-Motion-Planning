@@ -10,7 +10,7 @@ from moveit_msgs.msg import CollisionObject, AttachedCollisionObject
 from moveit_msgs.msg import PlanningScene as PS
 
 
-class PlanningSceneWrapper:
+class PlanningScene:
     """
     A wrapper class to manage collision objects in the planning scene.
 
@@ -21,7 +21,7 @@ class PlanningSceneWrapper:
     def __init__(
         self,
         node: Node,
-        world_frame: str = 'fer_link0',
+        world_frame: str = 'base',
         ee_link: str = 'fer_hand',
         planning_scene_topic: str = '/planning_scene',
     ) -> None:

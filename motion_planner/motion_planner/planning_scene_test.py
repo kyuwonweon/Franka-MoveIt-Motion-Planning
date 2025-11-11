@@ -4,16 +4,14 @@ from time import sleep
 
 import rclpy
 
-from motion_planner.planning_scene import PlanningSceneWrapper
+from motion_planner.planning_scene import PlanningScene
 
 
 def main():
     """Spin a node that publishes planning scene changes."""
     rclpy.init()
-    node = rclpy.create_node('planning_scene_smoke_test')
-    ps = PlanningSceneWrapper(
-        node, world_frame='fer_link0', ee_link='fer_hand'
-    )
+    node = rclpy.create_node('planning_scene_test')
+    ps = PlanningScene(node, world_frame='base', ee_link='fer_hand')
 
     def _publish_scene():
         ps.add_box('box1', (0.05, 0.05, 0.1), (0.50, 0.0, 0.0))
