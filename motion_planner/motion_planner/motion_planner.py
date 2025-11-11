@@ -322,7 +322,7 @@ async def integration_test(node: Node, planner: MotionPlanner) -> None:
         # )
 
         # Test for ee pose movement
-        ee_pos1 = np.array([0.3, 0.0, 0.0])
+        ee_pos1 = np.array([0.3, 0.3, 0.5])
         ee_orient1 = np.array([0.0, 0.0, 0.0, 1.0])
         node.get_logger().info('Starting end-effector pose motion test...')
 
