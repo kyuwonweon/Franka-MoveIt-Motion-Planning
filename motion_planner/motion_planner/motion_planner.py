@@ -12,8 +12,10 @@ from moveit_msgs.msg import (
     Constraints,
     PositionConstraint,
     OrientationConstraint,
+    PlanningOptions,
 )
 from moveit_msgs.srv import GetCartesianPath, GetCartesianPath_Response
+from moveit_msgs.msg import JointConstraint
 from geometry_msgs.msg import Pose
 import asyncio
 
@@ -29,7 +31,9 @@ class MotionPlanner:
             node, MoveGroup, '/move_action', callback_group=self._cbgroup
         )
         self._c_cartesian_path = self._node.create_client(
-            GetCartesianPath, 'cartesian_path', callback_group=self._cbgroup
+            GetCartesianPath,
+            'compute_cartesian_path',
+            callback_group=self._cbgroup,
         )
         self._logger = node.get_logger()
         self._logger.error('Motion_Planner Started. Waiting for goal')
@@ -106,13 +110,18 @@ class MotionPlanner:
         """
         goal_msg = MoveGroup.Goal()
         request = MotionPlanRequest()
+        request.group_name = 'fer_arm'
+        request.num_planning_attempts = 5
+        request.allowed_planning_time = 10.0
+        request.max_velocity_scaling_factor = 0.1
+        request.max_acceleration_scaling_factor = 0.1
 
         if start_joints is not None:
             request.start_state = self.start_state(start_joints)
 
         request.goal_constraints = self.joint_constraints(goal_joints)
         goal_msg.request = request
-        planning_options = MoveGroup.PlanningOptions()
+        planning_options = PlanningOptions()
         planning_options.plan_only = not execute_immediately
         goal_msg.planning_options = planning_options
 
@@ -120,13 +129,13 @@ class MotionPlanner:
         response_goal_handle = await self._c_move_group.send_goal_async(
             goal_msg
         )
+        print('Plan result:', response_goal_handle)
         self._logger.info(
             f'Received response goal handle: {response_goal_handle.accepted}'
         )
         self._logger.info('Awaiting the result')
         response = await response_goal_handle.get_result_async()
         self._logger.info(f'Received the result: {response}')
-        response_goal_handle.succeed()
         self._logger.info('Returning the result')
 
         return response.result
@@ -208,11 +217,39 @@ class MotionPlanner:
 
     def start_state(self, joints):
         """Set start state."""
-        return RobotState()
+        robotstate = RobotState()
+        robotstate.joint_state.name = [
+            'fer_joint1',
+            'fer_joint2',
+            'fer_joint3',
+            'fer_joint4',
+            'fer_joint5',
+            'fer_joint6',
+            'fer_joint7',
+        ]
+        robotstate.joint_state.position = [float(j) for j in joints]
+        return robotstate
 
     def joint_constraints(self, joints):
         """Set goal state."""
-        return Constraints()
+        constraints = Constraints()
+        joint_names = [
+            'fer_joint1',
+            'fer_joint2',
+            'fer_joint3',
+            'fer_joint4',
+            'fer_joint5',
+            'fer_joint6',
+            'fer_joint7',
+        ]
+        for i, joint_value in enumerate(joints):
+            jointconstraint = JointConstraint()
+            jointconstraint.joint_name = joint_names[i]
+            jointconstraint.position = float(joint_value)
+            jointconstraint.tolerance_above = 0.01
+            jointconstraint.tolerance_below = 0.01
+            constraints.joint_constraints.append(jointconstraint)
+        return [constraints]
 
 
 async def integration_test() -> None:
@@ -222,8 +259,13 @@ async def integration_test() -> None:
         node = rclpy.create_node('test_motion_planner_node')
         planner = MotionPlanner(node)
 
-        pos1 = np.zeros(6)
-        pos2 = np.ones(6)
+        node.get_logger().info('Waiting for /move_action server ')
+        while not planner._c_move_group.wait_for_server(timeout_sec=5.0):
+            node.get_logger().warn('Still waiting for /move_action server')
+
+        node.get_logger().info('/move_action server ready. Sending goal now')
+        pos1 = np.zeros(7)
+        pos2 = np.ones(7)
 
         task = asyncio.create_task(
             planner.move_to_joint_target(
