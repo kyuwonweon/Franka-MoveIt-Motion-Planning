@@ -5,6 +5,7 @@ import rclpy
 from rclpy.node import Node
 from rclpy.action import ActionClient
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
+from rclpy.executors import MultiThreadedExecutor
 from moveit_msgs.action import MoveGroup
 from moveit_msgs.msg import (
     MotionPlanRequest,
@@ -13,11 +14,14 @@ from moveit_msgs.msg import (
     PositionConstraint,
     OrientationConstraint,
     PlanningOptions,
+    BoundingVolume,
 )
 from moveit_msgs.srv import GetCartesianPath, GetCartesianPath_Response
 from moveit_msgs.msg import JointConstraint
-from geometry_msgs.msg import Pose
+from geometry_msgs.msg import Pose, Quaternion
+from shape_msgs.msg import SolidPrimitive
 import asyncio
+import threading
 
 
 class MotionPlanner:
@@ -42,7 +46,7 @@ class MotionPlanner:
         self,
         goal_ee_position: np.ndarray | None,
         goal_ee_orientation: np.ndarray | None,
-        start_ee_pose: np.ndarray | None = None,
+        start_joints: np.ndarray | None = None,
         execute_immediately: bool = False,
     ) -> None:
         """
@@ -55,8 +59,8 @@ class MotionPlanner:
             goal_ee_orientation (np.ndarray): end EE position [x,y,z,w]-
             quaternion.If not specified, any orientation is allowed such that
             the given position is achieved.
-            start_ee_pose (list[float]): start EE position & orientation;
-            [x,y,z,x,y,z,w]. If not given, use current robot pose as start.
+            start_joints (np.ndarray): array of joint angles for each joint.
+            If not given, use current robot pose as start.
             execute_immediately (bool): immediately execute the pat
 
         """
@@ -67,29 +71,66 @@ class MotionPlanner:
         goal_msg = MoveGroup.Goal()
         request = MotionPlanRequest()
         goal_constraint = Constraints()
+        request.group_name = 'fer_manipulator'
+        request.num_planning_attempts = 10
+        request.allowed_planning_time = 20.0
+        request.max_velocity_scaling_factor = 0.1
+        request.max_acceleration_scaling_factor = 0.1
 
         if goal_ee_position is not None:
             pos_constraint = PositionConstraint()
-            pos_constraint.target_point_offset.x = goal_ee_position[0]
-            pos_constraint.target_point_offset.y = goal_ee_position[1]
-            pos_constraint.target_point_offset.z = goal_ee_position[2]
+            pos_constraint.header.frame_id = 'base'
+            pos_constraint.link_name = 'fer_hand_tcp'
+            pos_constraint.target_point_offset.x = 0.0
+            pos_constraint.target_point_offset.y = 0.0
+            pos_constraint.target_point_offset.z = 0.0
+            box = SolidPrimitive()
+            box.type = SolidPrimitive.BOX
+            box.dimensions = [0.01, 0.01, 0.01]
+            pos_constraint.constraint_region = BoundingVolume()
+            pos_constraint.constraint_region.primitives.append(box)
+
+            goal_box_pose = Pose()
+            goal_box_pose.position.x = goal_ee_position[0]
+            goal_box_pose.position.y = goal_ee_position[1]
+            goal_box_pose.position.z = goal_ee_position[2]
+            goal_box_pose.orientation.w = 1.0
+            pos_constraint.weight = 1.0
+            pos_constraint.constraint_region.primitive_poses.append(
+                goal_box_pose
+            )
             goal_constraint.position_constraints.append(pos_constraint)
+
         if goal_ee_orientation is not None:
             orient_constraint = OrientationConstraint()
-            orient_constraint.orientation.x = goal_ee_orientation[0]
-            orient_constraint.orientation.y = goal_ee_orientation[1]
-            orient_constraint.orientation.z = goal_ee_orientation[2]
-            orient_constraint.orientation.w = goal_ee_orientation[3]
+            orient_constraint.header.frame_id = 'base'
+            orient_constraint.link_name = 'fer_hand_tcp'
+            q = Quaternion()
+            q.x = goal_ee_orientation[0]
+            q.y = goal_ee_orientation[1]
+            q.z = goal_ee_orientation[2]
+            q.w = goal_ee_orientation[3]
+            orient_constraint.orientation = q
+            orient_constraint.absolute_x_axis_tolerance = 0.2
+            orient_constraint.absolute_y_axis_tolerance = 0.2
+            orient_constraint.absolute_z_axis_tolerance = 0.2
+            orient_constraint.weight = 1.0
             goal_constraint.orientation_constraints.append(orient_constraint)
 
         request.goal_constraints = [goal_constraint]
         goal_msg.request = request
-        planning_options = MoveGroup.PlanningOptions()
+        planning_options = PlanningOptions()
         planning_options.plan_only = not execute_immediately
         goal_msg.planning_options = planning_options
 
+        if start_joints is not None:
+            request.start_state = self.start_state(start_joints)
+
         self._logger.info('Sending goal to /move_action...')
         response_goal = await self._c_move_group.send_goal_async(goal_msg)
+        self._logger.info(
+            f'Received response goal handle: {response_goal.accepted}'
+        )
         return response_goal
 
     async def move_to_joint_target(
@@ -110,7 +151,7 @@ class MotionPlanner:
         """
         goal_msg = MoveGroup.Goal()
         request = MotionPlanRequest()
-        request.group_name = 'fer_arm'
+        request.group_name = 'fer_armr'
         request.num_planning_attempts = 5
         request.allowed_planning_time = 10.0
         request.max_velocity_scaling_factor = 0.1
@@ -129,7 +170,6 @@ class MotionPlanner:
         response_goal_handle = await self._c_move_group.send_goal_async(
             goal_msg
         )
-        print('Plan result:', response_goal_handle)
         self._logger.info(
             f'Received response goal handle: {response_goal_handle.accepted}'
         )
@@ -227,7 +267,18 @@ class MotionPlanner:
             'fer_joint6',
             'fer_joint7',
         ]
-        robotstate.joint_state.position = [float(j) for j in joints]
+        if joints is None:
+            robotstate.joint_state.position = [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+            ]
+        else:
+            robotstate.joint_state.position = [float(j) for j in joints]
         return robotstate
 
     def joint_constraints(self, joints):
@@ -252,37 +303,66 @@ class MotionPlanner:
         return [constraints]
 
 
-async def integration_test() -> None:
+async def integration_test(node: Node, planner: MotionPlanner) -> None:
     """Test move plan functions."""
-    rclpy.init()
     try:
-        node = rclpy.create_node('test_motion_planner_node')
-        planner = MotionPlanner(node)
-
         node.get_logger().info('Waiting for /move_action server ')
         while not planner._c_move_group.wait_for_server(timeout_sec=5.0):
             node.get_logger().warn('Still waiting for /move_action server')
 
         node.get_logger().info('/move_action server ready. Sending goal now')
-        pos1 = np.zeros(7)
-        pos2 = np.ones(7)
 
+        # Test for joint state movement
+        # pos1 = np.zeros(7)
+        # pos2 = np.ones(7)
+        # task = asyncio.create_task(
+        #    planner.move_to_joint_target(
+        #        goal_joints=pos2, start_joints=pos1, execute_immediately=True
+        #    )
+        # )
+
+        # Test for ee pose movement
+        ee_pos1 = np.array([0.3, 0.0, 0.0])
+        ee_orient1 = np.array([0.0, 0.0, 0.0, 1.0])
+        node.get_logger().info('Starting end-effector pose motion test...')
+
+        # Create the task
         task = asyncio.create_task(
-            planner.move_to_joint_target(
-                goal_joints=pos2, start_joints=pos1, execute_immediately=True
+            planner.move_to_ee_pose(
+                goal_ee_position=ee_pos1,
+                goal_ee_orientation=ee_orient1,
+                start_joints=None,
+                execute_immediately=True,
             )
         )
 
-        result = await task
-        node.get_logger().info(f'Motion result: {result}')
+        goal_handle = await task
+
+        if goal_handle.accepted:
+            node.get_logger().info('Goal accepted.')
+        else:
+            node.get_logger().warn('Goal was rejected.')
     finally:
-        node.destroy_node()
+        node.get_logger().info('Integration test finished.')
         rclpy.shutdown()
 
 
 def main():
     """Run main."""
-    asyncio.run(integration_test())
+    rclpy.init()
+    node = rclpy.create_node('test_motion_planner_node')
+    planner = MotionPlanner(node)
+    executor = MultiThreadedExecutor()
+    executor.add_node(node)
+    executor_thread = threading.Thread(target=executor.spin, daemon=True)
+    executor_thread.start()
+
+    try:
+        asyncio.run(integration_test(node, planner))
+    finally:
+        executor.shutdown()
+        executor_thread.join()
+        node.destroy_node()
 
 
 if __name__ == '__main__':
