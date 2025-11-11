@@ -1,1 +1,369 @@
-"""Motion planning wrapper."""
+"""Plan motion of the robot."""
+
+import numpy as np
+import rclpy
+from rclpy.node import Node
+from rclpy.action import ActionClient
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
+from rclpy.executors import MultiThreadedExecutor
+from moveit_msgs.action import MoveGroup
+from moveit_msgs.msg import (
+    MotionPlanRequest,
+    RobotState,
+    Constraints,
+    PositionConstraint,
+    OrientationConstraint,
+    PlanningOptions,
+    BoundingVolume,
+)
+from moveit_msgs.srv import GetCartesianPath, GetCartesianPath_Response
+from moveit_msgs.msg import JointConstraint
+from geometry_msgs.msg import Pose, Quaternion
+from shape_msgs.msg import SolidPrimitive
+import asyncio
+import threading
+
+
+class MotionPlanner:
+    """Briefly describes the motion planner class."""
+
+    def __init__(self, node: Node):
+        """Initialize the motion planner node."""
+        self._node = node
+        self._cbgroup = MutuallyExclusiveCallbackGroup()
+        self._c_move_group = ActionClient(
+            node, MoveGroup, '/move_action', callback_group=self._cbgroup
+        )
+        self._c_cartesian_path = self._node.create_client(
+            GetCartesianPath,
+            'compute_cartesian_path',
+            callback_group=self._cbgroup,
+        )
+        self._logger = node.get_logger()
+        self._logger.error('Motion_Planner Started. Waiting for goal')
+
+    async def move_to_ee_pose(
+        self,
+        goal_ee_position: np.ndarray | None,
+        goal_ee_orientation: np.ndarray | None,
+        start_joints: np.ndarray | None = None,
+        execute_immediately: bool = False,
+    ) -> None:
+        """
+        Move from a specified end-effector configuration to another.
+
+        Args:
+            goal_ee_position (np.ndarray): end EE position [x,y,z]. If not
+            specified, any position is allowed such that the given orientation
+            is achieved.
+            goal_ee_orientation (np.ndarray): end EE position [x,y,z,w]-
+            quaternion.If not specified, any orientation is allowed such that
+            the given position is achieved.
+            start_joints (np.ndarray): array of joint angles for each joint.
+            If not given, use current robot pose as start.
+            execute_immediately (bool): immediately execute the pat
+
+        """
+        if goal_ee_orientation is None and goal_ee_position is None:
+            raise ValueError(
+                'One of orientation and position must be specified.'
+            )
+        goal_msg = MoveGroup.Goal()
+        request = MotionPlanRequest()
+        goal_constraint = Constraints()
+        request.group_name = 'fer_manipulator'
+        request.num_planning_attempts = 10
+        request.allowed_planning_time = 20.0
+        request.max_velocity_scaling_factor = 0.1
+        request.max_acceleration_scaling_factor = 0.1
+
+        if goal_ee_position is not None:
+            pos_constraint = PositionConstraint()
+            pos_constraint.header.frame_id = 'base'
+            pos_constraint.link_name = 'fer_hand_tcp'
+            pos_constraint.target_point_offset.x = 0.0
+            pos_constraint.target_point_offset.y = 0.0
+            pos_constraint.target_point_offset.z = 0.0
+            box = SolidPrimitive()
+            box.type = SolidPrimitive.BOX
+            box.dimensions = [0.01, 0.01, 0.01]
+            pos_constraint.constraint_region = BoundingVolume()
+            pos_constraint.constraint_region.primitives.append(box)
+
+            goal_box_pose = Pose()
+            goal_box_pose.position.x = goal_ee_position[0]
+            goal_box_pose.position.y = goal_ee_position[1]
+            goal_box_pose.position.z = goal_ee_position[2]
+            goal_box_pose.orientation.w = 1.0
+            pos_constraint.weight = 1.0
+            pos_constraint.constraint_region.primitive_poses.append(
+                goal_box_pose
+            )
+            goal_constraint.position_constraints.append(pos_constraint)
+
+        if goal_ee_orientation is not None:
+            orient_constraint = OrientationConstraint()
+            orient_constraint.header.frame_id = 'base'
+            orient_constraint.link_name = 'fer_hand_tcp'
+            q = Quaternion()
+            q.x = goal_ee_orientation[0]
+            q.y = goal_ee_orientation[1]
+            q.z = goal_ee_orientation[2]
+            q.w = goal_ee_orientation[3]
+            orient_constraint.orientation = q
+            orient_constraint.absolute_x_axis_tolerance = 0.2
+            orient_constraint.absolute_y_axis_tolerance = 0.2
+            orient_constraint.absolute_z_axis_tolerance = 0.2
+            orient_constraint.weight = 1.0
+            goal_constraint.orientation_constraints.append(orient_constraint)
+
+        request.goal_constraints = [goal_constraint]
+        goal_msg.request = request
+        planning_options = PlanningOptions()
+        planning_options.plan_only = not execute_immediately
+        goal_msg.planning_options = planning_options
+
+        if start_joints is not None:
+            request.start_state = self.start_state(start_joints)
+
+        self._logger.info('Sending goal to /move_action...')
+        response_goal = await self._c_move_group.send_goal_async(goal_msg)
+        self._logger.info(
+            f'Received response goal handle: {response_goal.accepted}'
+        )
+        return response_goal
+
+    async def move_to_joint_target(
+        self,
+        goal_joints: np.ndarray,
+        start_joints: np.ndarray | None = None,
+        execute_immediately: bool = False,
+    ) -> None:
+        """
+        Move from a specified configuration in joint space to another.
+
+        Args:
+            start_joints (np.ndarray): array of joint angles for each joint.
+            If not given, use current robot pose as start.
+            goal_joints (np.ndarray): array of joint angles for each joint
+            execute_immediately (bool): immediately execute the path
+
+        """
+        goal_msg = MoveGroup.Goal()
+        request = MotionPlanRequest()
+        request.group_name = 'fer_armr'
+        request.num_planning_attempts = 5
+        request.allowed_planning_time = 10.0
+        request.max_velocity_scaling_factor = 0.1
+        request.max_acceleration_scaling_factor = 0.1
+
+        if start_joints is not None:
+            request.start_state = self.start_state(start_joints)
+
+        request.goal_constraints = self.joint_constraints(goal_joints)
+        goal_msg.request = request
+        planning_options = PlanningOptions()
+        planning_options.plan_only = not execute_immediately
+        goal_msg.planning_options = planning_options
+
+        self._logger.info('Sending goal to /move_action...')
+        response_goal_handle = await self._c_move_group.send_goal_async(
+            goal_msg
+        )
+        self._logger.info(
+            f'Received response goal handle: {response_goal_handle.accepted}'
+        )
+        self._logger.info('Awaiting the result')
+        response = await response_goal_handle.get_result_async()
+        self._logger.info(f'Received the result: {response}')
+        self._logger.info('Returning the result')
+
+        return response.result
+
+    async def plan_cartesian_path(
+        self,
+        goal_ee_pose: np.ndarray,
+        start_ee_pose: np.ndarray | None = None,
+        execute_immediately: bool = False,
+    ) -> GetCartesianPath_Response:
+        """
+        Plan a Cartesian path from any valid starting pose to a goal pose.
+
+        Uses moveit_msgs/GetCartesianPath Service
+
+        Args:
+            goal_ee_pose (np.ndarray): destination pose [x,y,z,x,y,z,w]
+            start_ee_pose (np.ndarray): start pose [x,y,z,x,y,z,w].
+            If not provided, use current robot pose as start pose.
+            execute_immediately (bool): immediately execute the path
+
+        Returns:
+            GetCartesianPath_Response: response of moveit GetCartesianPath srv
+
+        """
+        request = GetCartesianPath.Request()
+
+        if goal_ee_pose is not None:
+            goal_pose = Pose()
+            goal_pose.position.x = goal_ee_pose[0]
+            goal_pose.position.y = goal_ee_pose[1]
+            goal_pose.position.z = goal_ee_pose[2]
+            goal_pose.orientation.x = goal_ee_pose[3]
+            goal_pose.orientation.y = goal_ee_pose[4]
+            goal_pose.orientation.z = goal_ee_pose[5]
+            goal_pose.orientation.w = goal_ee_pose[6]
+            request.waypoints = [goal_pose]
+        if start_ee_pose is not None:
+            # import inverse kinematics from robot state class
+            start_joints = self.robot_state.inversekinematics(start_ee_pose)
+            request.start_state = self.start_state(start_joints)
+        else:
+            # request.start_state = {$idk what returns robot's current state}
+            return
+        self._logger.info('Request Cartesian path from service')
+        response = await self._c_cartesian_path.call_async(request)
+
+        return response
+
+    def plan_to_named_config(
+        self,
+        named_config: str,
+        start_ee_pose: np.ndarray | None = None,
+        execute_immediately: bool = False,
+    ) -> GetCartesianPath_Response:
+        """
+        Plan a path from any valid starting pose to a named configuration.
+
+        This "named configuration" can be defined in an SRDF or a remembered
+        from a previous call to moveit python library's remember_joint_values()
+        method, per docs here:
+        https://docs.ros.org/en/jade/api/moveit_commander/html/classmoveit__commander_1_1move__group_1_1MoveGroupCommander.html#af9c9fc79be7fee5c366102db427fb28b
+
+        Args:
+            named_config (str): Named configuration
+            start_ee_pose (np.ndarray, optional): start pose; if None, use
+                current robot pose.
+            execute_immediately (bool): immediately execute the path
+
+        Returns:
+            GetCartesianPath_Response: TODO figure out
+
+        """
+        raise NotImplementedError
+
+    def list_named_configs(self) -> list[str]:
+        """Return a list of the named configs currently registered."""
+        return []
+
+    def start_state(self, joints):
+        """Set start state."""
+        robotstate = RobotState()
+        robotstate.joint_state.name = [
+            'fer_joint1',
+            'fer_joint2',
+            'fer_joint3',
+            'fer_joint4',
+            'fer_joint5',
+            'fer_joint6',
+            'fer_joint7',
+        ]
+        if joints is None:
+            robotstate.joint_state.position = [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+            ]
+        else:
+            robotstate.joint_state.position = [float(j) for j in joints]
+        return robotstate
+
+    def joint_constraints(self, joints):
+        """Set goal state."""
+        constraints = Constraints()
+        joint_names = [
+            'fer_joint1',
+            'fer_joint2',
+            'fer_joint3',
+            'fer_joint4',
+            'fer_joint5',
+            'fer_joint6',
+            'fer_joint7',
+        ]
+        for i, joint_value in enumerate(joints):
+            jointconstraint = JointConstraint()
+            jointconstraint.joint_name = joint_names[i]
+            jointconstraint.position = float(joint_value)
+            jointconstraint.tolerance_above = 0.01
+            jointconstraint.tolerance_below = 0.01
+            constraints.joint_constraints.append(jointconstraint)
+        return [constraints]
+
+
+async def integration_test(node: Node, planner: MotionPlanner) -> None:
+    """Test move plan functions."""
+    try:
+        node.get_logger().info('Waiting for /move_action server ')
+        while not planner._c_move_group.wait_for_server(timeout_sec=5.0):
+            node.get_logger().warn('Still waiting for /move_action server')
+
+        node.get_logger().info('/move_action server ready. Sending goal now')
+
+        # Test for joint state movement
+        # pos1 = np.zeros(7)
+        # pos2 = np.ones(7)
+        # task = asyncio.create_task(
+        #    planner.move_to_joint_target(
+        #        goal_joints=pos2, start_joints=pos1, execute_immediately=True
+        #    )
+        # )
+
+        # Test for ee pose movement
+        ee_pos1 = np.array([0.3, 0.3, 0.5])
+        ee_orient1 = np.array([0.0, 0.0, 0.0, 1.0])
+        node.get_logger().info('Starting end-effector pose motion test...')
+
+        # Create the task
+        task = asyncio.create_task(
+            planner.move_to_ee_pose(
+                goal_ee_position=ee_pos1,
+                goal_ee_orientation=ee_orient1,
+                start_joints=None,
+                execute_immediately=True,
+            )
+        )
+
+        goal_handle = await task
+
+        if goal_handle.accepted:
+            node.get_logger().info('Goal accepted.')
+        else:
+            node.get_logger().warn('Goal was rejected.')
+    finally:
+        node.get_logger().info('Integration test finished.')
+        rclpy.shutdown()
+
+
+def main():
+    """Run main."""
+    rclpy.init()
+    node = rclpy.create_node('test_motion_planner_node')
+    planner = MotionPlanner(node)
+    executor = MultiThreadedExecutor()
+    executor.add_node(node)
+    executor_thread = threading.Thread(target=executor.spin, daemon=True)
+    executor_thread.start()
+
+    try:
+        asyncio.run(integration_test(node, planner))
+    finally:
+        executor.shutdown()
+        executor_thread.join()
+        node.destroy_node()
+
+
+if __name__ == '__main__':
+    main()

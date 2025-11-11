@@ -16,7 +16,11 @@ setup(
         ('share/' + package_name, ['package.xml']),
         (
             'share/' + package_name + '/launch/',
-            ['motion_planner/launch/pickplace.launch.xml'],
+            ['launch/pickplace.launch.xml'],
+        ),
+        (
+            'share/' + package_name + '/launch/',
+            ['launch/moplan.launch.py'],
         ),
     ],
     install_requires=['setuptools'],
@@ -32,6 +36,8 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'motion_planner_integration_test = '
+            'motion_planner.motion_planner:main'
             'planning_scene_test = motion_planner.planning_scene_test:main',
             'robot_state_test = motion_planner.robot_state_test:main',
         ],
