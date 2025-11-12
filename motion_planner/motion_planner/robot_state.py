@@ -25,9 +25,9 @@ class RobotState:
     def __init__(
         self,
         node: Node,
-        planning_group: str = 'fer_arm',
-        base_link: str = 'fer_link0',
-        ee_link: str = 'fer_hand',
+        planning_group: str = 'fer_manipulator',
+        base_link: str = 'base',
+        ee_link: str = 'fer_hand_tcp',
     ) -> None:
         """Initialize RobotState with ROS2 node and parameters."""
         self._node = node
