@@ -7,13 +7,6 @@
   <maintainer email="cwoodhayes@gmail.com">conorbot</maintainer>
   <license>MIT</license>
 
-  <exec_depend>rclpy</exec_depend>
-  <exec_depend>moveit_commander</exec_depend>
-  <exec_depend>shape_msgs</exec_depend>
-  <exec_depend>moveit_msgs</exec_depend>
-  <exec_depend>geometry_msgs</exec_depend>
-  <exec_depend>typing</exec_depend>
-
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
   <test_depend>ament_pep257</test_depend>
@@ -26,10 +19,10 @@
   <exec_depend>rviz2</exec_depend>
   <exec_depend>moveit_configs_utils</exec_depend>
   <exec_depend>moveit_commander</exec_depend>
-  <exec_depend>moveit_msgs</exec_depend>
   <exec_depend>asyncio</exec_depend>
   <exec_depend>franka_fer_moveit_config</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>shape_msgs</exec_depend>
 
   <export>
     <build_type>ament_python</build_type>
