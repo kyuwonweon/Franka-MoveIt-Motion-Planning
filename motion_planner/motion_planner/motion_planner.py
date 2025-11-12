@@ -16,6 +16,7 @@ from moveit_msgs.msg import (
     PlanningOptions,
     BoundingVolume,
 )
+from motion_planner.robot_state import RobotState as RS
 from moveit_msgs.srv import GetCartesianPath, GetCartesianPath_Response
 from moveit_msgs.msg import JointConstraint
 from geometry_msgs.msg import Pose, Quaternion
@@ -27,9 +28,10 @@ import threading
 class MotionPlanner:
     """Briefly describes the motion planner class."""
 
-    def __init__(self, node: Node):
+    def __init__(self, node: Node, robot_state=RS):
         """Initialize the motion planner node."""
         self._node = node
+        self.robot_state = RS
         self._cbgroup = MutuallyExclusiveCallbackGroup()
         self._c_move_group = ActionClient(
             node, MoveGroup, '/move_action', callback_group=self._cbgroup
@@ -151,7 +153,7 @@ class MotionPlanner:
         """
         goal_msg = MoveGroup.Goal()
         request = MotionPlanRequest()
-        request.group_name = 'fer_armr'
+        request.group_name = 'fer_manipulator'
         request.num_planning_attempts = 5
         request.allowed_planning_time = 10.0
         request.max_velocity_scaling_factor = 0.1
@@ -202,6 +204,8 @@ class MotionPlanner:
 
         """
         request = GetCartesianPath.Request()
+        request.group_name = 'fer_manipulator'
+        request.link_name = 'fer_hand_tcp'
 
         if goal_ee_pose is not None:
             goal_pose = Pose()
@@ -213,19 +217,21 @@ class MotionPlanner:
             goal_pose.orientation.z = goal_ee_pose[5]
             goal_pose.orientation.w = goal_ee_pose[6]
             request.waypoints = [goal_pose]
+            request.max_step = 0.01
+
         if start_ee_pose is not None:
-            # import inverse kinematics from robot state class
-            start_joints = self.robot_state.inversekinematics(start_ee_pose)
-            request.start_state = self.start_state(start_joints)
-        else:
-            # request.start_state = {$idk what returns robot's current state}
-            return
+            request.start_state = self.start_state(start_ee_pose)
+
+        self._logger.info('Waiting for /compute_cartesian_path service')
+        while not self._c_cartesian_path.wait_for_service(timeout_sec=10.0):
+            self._logger.warn('Still waiting for service')
+
         self._logger.info('Request Cartesian path from service')
         response = await self._c_cartesian_path.call_async(request)
 
         return response
 
-    def plan_to_named_config(
+    async def plan_to_named_config(
         self,
         named_config: str,
         start_ee_pose: np.ndarray | None = None,
@@ -249,11 +255,49 @@ class MotionPlanner:
             GetCartesianPath_Response: TODO figure out
 
         """
-        raise NotImplementedError
+        request = MotionPlanRequest()
+        request.group_name = 'fer_manipulator'
+
+        named_joint_states = {
+            'ready': np.array(
+                [
+                    0.0,
+                    -0.7853981633974483,
+                    0.0,
+                    -2.356194490192345,
+                    0.0,
+                    1.5707963267948966,
+                    0.7853981633974483,
+                ]
+            ),
+            'extended': np.array(
+                [
+                    0.0,
+                    0.0,
+                    0.0,
+                    -0.1,
+                    0.0,
+                    1.5707963267948966,
+                    0.7853981633974483,
+                ]
+            ),
+        }
+        if named_config not in named_joint_states:
+            self._logger.error('No such named configuration.')
+            return None
+
+        goal_joints = named_joint_states[named_config]
+        start_ik = await RS.inverse_kinematics(
+            self.robot_state, start_ee_pose, 'fer_manipulator'
+        )
+        request.start_state = start_ik.solution
+
+        request.goal_constraints = self.joint_constraints(goal_joints)
+        return request
 
     def list_named_configs(self) -> list[str]:
         """Return a list of the named configs currently registered."""
-        return []
+        return ['ready', 'extended']
 
     def start_state(self, joints):
         """Set start state."""
@@ -307,10 +351,14 @@ async def integration_test(node: Node, planner: MotionPlanner) -> None:
     """Test move plan functions."""
     try:
         node.get_logger().info('Waiting for /move_action server ')
-        while not planner._c_move_group.wait_for_server(timeout_sec=5.0):
-            node.get_logger().warn('Still waiting for /move_action server')
+        # while not planner._c_move_group.wait_for_server(timeout_sec=5.0):
+        #    node.get_logger().warn('Still waiting for /move_action server')
 
-        node.get_logger().info('/move_action server ready. Sending goal now')
+        # node.get_logger().info('/move_action server ready. Sending goal now')
+        while not planner._c_cartesian_path.wait_for_service(timeout_sec=5.0):
+            node.get_logger().warn('Still waiting for cartesian service')
+        node.get_logger().info('Service is ready.')
+        await asyncio.sleep(5.0)
 
         # Test for joint state movement
         # pos1 = np.zeros(7)
@@ -322,26 +370,45 @@ async def integration_test(node: Node, planner: MotionPlanner) -> None:
         # )
 
         # Test for ee pose movement
-        ee_pos1 = np.array([0.3, 0.3, 0.5])
-        ee_orient1 = np.array([0.0, 0.0, 0.0, 1.0])
-        node.get_logger().info('Starting end-effector pose motion test...')
+        # ee_pos1 = np.array([0.3, 0.3, 0.5])
+        # ee_orient1 = np.array([0.0, 0.0, 0.0, 1.0])
+        # node.get_logger().info('Starting end-effector pose motion test...')
 
         # Create the task
+        # task = asyncio.create_task(
+        #    planner.move_to_ee_pose(
+        #        goal_ee_position=ee_pos1,
+        #        goal_ee_orientation=ee_orient1,
+        #        start_joints=None,
+        #        execute_immediately=True,
+        #    )
+        # )
+        # goal_handle = await task
+        # if goal_handle.accepted:
+        #    node.get_logger().info('Goal accepted.')
+        # else:
+        #    node.get_logger().warn('Goal was rejected.')
+
+        # Test for cartesian path
+        # from ros2 param get /move_group robot_description_semantic - ready
+        start_joints_pose = np.array(
+            [0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785]
+        )
+        cartesian_goal_pose = np.array(
+            [0.0, 0, 0.0, -2.356, 0.0, 1.571, 0.785]
+        )
         task = asyncio.create_task(
-            planner.move_to_ee_pose(
-                goal_ee_position=ee_pos1,
-                goal_ee_orientation=ee_orient1,
-                start_joints=None,
+            planner.plan_cartesian_path(
+                goal_ee_pose=cartesian_goal_pose,
+                start_ee_pose=start_joints_pose,
                 execute_immediately=True,
             )
         )
-
-        goal_handle = await task
-
-        if goal_handle.accepted:
-            node.get_logger().info('Goal accepted.')
-        else:
-            node.get_logger().warn('Goal was rejected.')
+        response = await task
+        node.get_logger().info(
+            f'Cartesian path plan complete.'
+            f'Fraction of path found: {response.fraction}'
+        )
     finally:
         node.get_logger().info('Integration test finished.')
         rclpy.shutdown()
