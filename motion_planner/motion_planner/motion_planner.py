@@ -4,6 +4,7 @@ import numpy as np
 import rclpy
 from rclpy.node import Node
 from rclpy.action import ActionClient
+from rclpy.action.client import ClientGoalHandle
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from moveit_msgs.action import MoveGroup
@@ -23,11 +24,18 @@ from shape_msgs.msg import SolidPrimitive
 import asyncio
 import threading
 
+from motion_planner import robot_state, planning_scene
+
 
 class MotionPlanner:
     """Briefly describes the motion planner class."""
 
-    def __init__(self, node, robot_state, planning_scene):
+    def __init__(
+        self,
+        node: Node,
+        robot_state: robot_state.RobotState,
+        planning_scene: planning_scene.PlanningScene,
+    ):
         """Initialize the motion planner node."""
         self._node = node
         self.robot_state = robot_state
@@ -50,7 +58,7 @@ class MotionPlanner:
         goal_ee_orientation: np.ndarray | None,
         start_joints: np.ndarray | None = None,
         execute_immediately: bool = False,
-    ) -> None:
+    ) -> ClientGoalHandle:
         """
         Move from a specified end-effector configuration to another.
 
@@ -90,7 +98,7 @@ class MotionPlanner:
             box.type = SolidPrimitive.BOX
             box.dimensions = [0.01, 0.01, 0.01]
             pos_constraint.constraint_region = BoundingVolume()
-            pos_constraint.constraint_region.primitives.append(box)
+            pos_constraint.constraint_region.primitives.append(box)  # type: ignore
 
             goal_box_pose = Pose()
             goal_box_pose.position.x = goal_ee_position[0]
@@ -98,10 +106,10 @@ class MotionPlanner:
             goal_box_pose.position.z = goal_ee_position[2]
             goal_box_pose.orientation.w = 1.0
             pos_constraint.weight = 1.0
-            pos_constraint.constraint_region.primitive_poses.append(
+            pos_constraint.constraint_region.primitive_poses.append(  # type: ignore
                 goal_box_pose
             )
-            goal_constraint.position_constraints.append(pos_constraint)
+            goal_constraint.position_constraints.append(pos_constraint)  # type: ignore
 
         if goal_ee_orientation is not None:
             orient_constraint = OrientationConstraint()
@@ -117,7 +125,7 @@ class MotionPlanner:
             orient_constraint.absolute_y_axis_tolerance = 0.2
             orient_constraint.absolute_z_axis_tolerance = 0.2
             orient_constraint.weight = 1.0
-            goal_constraint.orientation_constraints.append(orient_constraint)
+            goal_constraint.orientation_constraints.append(orient_constraint)  # type: ignore
 
         request.goal_constraints = [goal_constraint]
         goal_msg.request = request
@@ -130,6 +138,10 @@ class MotionPlanner:
 
         self._logger.info('Sending goal to /move_action...')
         response_goal = await self._c_move_group.send_goal_async(goal_msg)
+        if response_goal is None:
+            raise ValueError(
+                'Received response goal of None from send_goal_async.'
+            )
         self._logger.info(
             f'Received response goal handle: {response_goal.accepted}'
         )
@@ -236,7 +248,7 @@ class MotionPlanner:
         named_config: str,
         start_ee_pose: np.ndarray | None = None,
         execute_immediately: bool = False,
-    ) -> MoveGroup.Result:
+    ) -> MoveGroup.Result | None:
         """
         Plan a path from any valid starting pose to a named configuration.
 
@@ -372,7 +384,7 @@ class MotionPlanner:
             jointconstraint.position = float(joint_value)
             jointconstraint.tolerance_above = 0.01
             jointconstraint.tolerance_below = 0.01
-            constraints.joint_constraints.append(jointconstraint)
+            constraints.joint_constraints.append(jointconstraint)  # type: ignore
         return [constraints]
 
 
@@ -454,7 +466,9 @@ def main():
     """Run main."""
     rclpy.init()
     node = rclpy.create_node('test_motion_planner_node')
-    planner = MotionPlanner(node)
+    rstate = robot_state.RobotState(node)
+    scene = planning_scene.PlanningScene(node)
+    planner = MotionPlanner(node, rstate, scene)
     executor = MultiThreadedExecutor()
     executor.add_node(node)
     executor_thread = threading.Thread(target=executor.spin, daemon=True)
