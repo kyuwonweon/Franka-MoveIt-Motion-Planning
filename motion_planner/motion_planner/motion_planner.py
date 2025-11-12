@@ -17,7 +17,7 @@ from moveit_msgs.msg import (
     PlanningOptions,
     BoundingVolume,
 )
-from moveit_msgs.srv import GetCartesianPath, GetCartesianPath_Response
+from moveit_msgs.srv import GetCartesianPath
 from moveit_msgs.msg import JointConstraint
 from geometry_msgs.msg import Pose, Quaternion, PoseStamped
 from shape_msgs.msg import SolidPrimitive
@@ -177,7 +177,7 @@ class MotionPlanner:
         goal_joints: np.ndarray,
         start_joints: np.ndarray | None = None,
         execute_immediately: bool = False,
-    ) -> None:
+    ) -> MoveGroup.Result | None:
         """
         Move from a specified configuration in joint space to another.
 
@@ -217,19 +217,15 @@ class MotionPlanner:
         )
         self._logger.info('Awaiting the result')
         response = await response_goal_handle.get_result_async()
-        self._logger.info(f'Received the result: {response}')
-        if response is None:
-            return None
-        self._logger.info('Returning the result')
-
-        return response.result
+        self._logger.debug(f'Received the response: {response}')
+        return response.result  # type: ignore
 
     async def plan_cartesian_path(
         self,
         goal_ee_pose: np.ndarray,
         start_ee_pose: np.ndarray | None = None,
         execute_immediately: bool = False,
-    ) -> GetCartesianPath_Response:
+    ) -> GetCartesianPath.Response:
         """
         Plan a Cartesian path from any valid starting pose to a goal pose.
 
@@ -271,7 +267,7 @@ class MotionPlanner:
         self._logger.info('Request Cartesian path from service')
         response = await self._c_cartesian_path.call_async(request)
 
-        return response
+        return response  # type: ignore
 
     async def plan_to_named_config(
         self,
@@ -368,6 +364,7 @@ class MotionPlanner:
         response = await response_goal.get_result_async()
         if response is None:
             self._logger.error('response=None')
+            return None
         return response.result
 
     def list_named_configs(self) -> list[str]:
@@ -431,61 +428,52 @@ async def integration_test(node: Node, planner: MotionPlanner) -> None:
         await asyncio.sleep(5.0)
 
         # Test for joint state movement
-        # pos1 = np.zeros(7)
-        # pos2 = np.ones(7)
-        # task = asyncio.create_task(
-        #    planner.move_to_joint_target(
-        #        goal_joints=pos2, start_joints=pos1, execute_immediately=True
-        #    )
-        # )
+        pos1 = np.zeros(7)
+        pos2 = np.ones(7)
+        await planner.move_to_joint_target(
+            goal_joints=pos2, start_joints=pos1, execute_immediately=True
+        )
 
         # Test for ee pose movement
-        # ee_pos1 = np.array([0.3, 0.3, 0.5])
-        # ee_orient1 = np.array([0.0, 0.0, 0.0, 1.0])
-        # node.get_logger().info('Starting end-effector pose motion test...')
+        ee_pos1 = np.array([0.3, 0.3, 0.5])
+        ee_orient1 = np.array([0.0, 0.0, 0.0, 1.0])
+        node.get_logger().info('Starting end-effector pose motion test...')
 
-        # Create the task
-        # task = asyncio.create_task(
-        #    planner.move_to_ee_pose(
-        #        goal_ee_position=ee_pos1,
-        #        goal_ee_orientation=ee_orient1,
-        #        start_joints=None,
-        #        execute_immediately=True,
-        #    )
-        # )
-        # goal_handle = await task
-        # if goal_handle.accepted:
-        #    node.get_logger().info('Goal accepted.')
-        # else:
-        #    node.get_logger().warn('Goal was rejected.')
+        goal_handle = await planner.move_to_ee_pose(
+            goal_ee_position=ee_pos1,
+            goal_ee_orientation=ee_orient1,
+            start_joints=None,
+            execute_immediately=True,
+        )
+        if goal_handle is not None and goal_handle.accepted:
+            node.get_logger().info('Goal accepted.')
+        else:
+            node.get_logger().warn('Goal was rejected.')
 
         # Test for cartesian path
         # from ros2 param get /move_group robot_description_semantic - ready
-        # start_joints_pose = np.array(
-        #    [0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785]
-        # )
-        # cartesian_goal_pose = np.array(
-        #    [0.0, 0, 0.0, -2.356, 0.0, 1.571, 0.785]
-        # )
-        # task = asyncio.create_task(
-        #    planner.plan_cartesian_path(
-        #        goal_ee_pose=cartesian_goal_pose,
-        #        start_ee_pose=start_joints_pose,
-        #        execute_immediately=True,
-        #    )
-        # )
-        # response = await task
-        # node.get_logger().info(
-        #    f'Cartesian path plan complete.'
-        #    f'Fraction of path found: {response.fraction}'
-
-        asyncio.create_task(
-            planner.plan_to_named_config(
-                named_config='extended',
-                start_ee_pose=None,
-                execute_immediately=True,
-            )
+        start_joints_pose = np.array(
+            [0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785]
         )
+        cartesian_goal_pose = np.array(
+            [0.0, 0, 0.0, -2.356, 0.0, 1.571, 0.785]
+        )
+        response = await planner.plan_cartesian_path(
+            goal_ee_pose=cartesian_goal_pose,
+            start_ee_pose=start_joints_pose,
+            execute_immediately=True,
+        )
+        node.get_logger().info(
+            f'Cartesian path plan complete.'
+            f'Fraction of path found: {response.fraction}'
+        )
+
+        resp = await planner.plan_to_named_config(
+            named_config='extended',
+            start_ee_pose=None,
+            execute_immediately=True,
+        )
+        logger.info(f'NAMED CONFIG RESPONSE: {resp}')
 
     finally:
         node.get_logger().info('Integration test finished.')
