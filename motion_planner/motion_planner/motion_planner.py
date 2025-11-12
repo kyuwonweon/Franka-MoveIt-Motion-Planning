@@ -375,6 +375,55 @@ class MotionPlanner:
             constraints.joint_constraints.append(jointconstraint)
         return [constraints]
 
+    async def gripper(
+        self,
+        offset: float = 0.3,
+        execute_immediately: bool = False,
+    ) -> None:
+        """
+        Open and close the gripper.
+
+        Args:
+            offset(float): offset of each fingers from origin
+            execute_immediately (bool): immediately execute the path
+
+        """
+        goal_msg = MoveGroup.Goal()
+        request = MotionPlanRequest()
+        request.group_name = 'hand'
+        request.max_velocity_scaling_factor = 0.1
+        request.max_acceleration_scaling_factor = 0.1
+
+        constraints = Constraints()
+        for joint in ['fer_finger_joint1', 'fer_finger_joint2']:
+            jc = JointConstraint()
+            jc.joint_name = joint
+            jc.position = offset
+            jc.tolerance_above = 0.005
+            jc.tolerance_below = 0.005
+            jc.weight = 1.0
+            constraints.joint_constraints.append(jc)
+
+        request.goal_constraints = [constraints]
+        goal_msg.request = request
+        planning_options = PlanningOptions()
+        planning_options.plan_only = not execute_immediately
+        goal_msg.planning_options = planning_options
+
+        self._logger.info('Sending goal to /move_action...')
+        response_goal_handle = await self._c_move_group.send_goal_async(
+            goal_msg
+        )
+        self._logger.info(
+            f'Received response goal handle: {response_goal_handle.accepted}'
+        )
+        self._logger.info('Awaiting the result')
+        response = await response_goal_handle.get_result_async()
+        self._logger.info(f'Received the result: {response}')
+        self._logger.info('Returning the result')
+
+        return response.result
+
 
 async def integration_test(node: Node, planner: MotionPlanner) -> None:
     """Test move plan functions."""
@@ -438,13 +487,29 @@ async def integration_test(node: Node, planner: MotionPlanner) -> None:
         #    f'Cartesian path plan complete.'
         #    f'Fraction of path found: {response.fraction}'
 
+        # asyncio.create_task(
+        #    planner.plan_to_named_config(
+        #        named_config='extended',
+        #        start_ee_pose=None,
+        #        execute_immediately=True,
+        #    )
+        # )
+
         asyncio.create_task(
-            planner.plan_to_named_config(
-                named_config='extended',
-                start_ee_pose=None,
+            planner.gripper(
+                offset=0.02,
                 execute_immediately=True,
             )
         )
+        node.get_logger().info('Gripper Opened.')
+        # asyncio.create_task(
+        #     planner.gripper(
+        #         offset = 0.0,
+        #         execute_immediately=True,
+        #     )
+        # )
+        # await asyncio.sleep(2.0)
+        # node.get_logger().info('Gripper Closed')
 
     finally:
         node.get_logger().info('Integration test finished.')
