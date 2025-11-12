@@ -50,20 +50,31 @@ class MotionPlanner:
             'compute_cartesian_path',
             callback_group=self._cbgroup,
         )
-        idx = 0
-        while not (
-            self._c_cartesian_path.wait_for_service(timeout_sec=5.0)
-            and self._c_move_group.wait_for_server(timeout_sec=5.0)
-        ):
-            if idx >= 5:
-                self._logger.error('Service(s) not online.')
-                return
-            self._logger.warn(
-                'Still waiting for cartesian and/or move_group service(s)...'
-            )
-            idx += 1
-
+        self._services_up = False
         self._logger.info('MotionPlanner initialized.')
+
+    def check_services_up(self) -> bool:
+        """Wait until services we depend upon are available."""
+        if self._services_up:
+            return True
+
+        for idx in range(5):
+            if self._c_cartesian_path.wait_for_service(
+                timeout_sec=5.0
+            ) and self._c_move_group.wait_for_server(timeout_sec=5.0):
+                self._logger.info('Services online.')
+                self._services_up = True
+                return True
+            else:
+                self._logger.warn(
+                    'Still waiting for cartesian and/or move_group '
+                    'service(s)...'
+                )
+        self._logger.error(
+            'Retries expired. cartesian and/or move_group '
+            'service(s) not available.'
+        )
+        return False
 
     async def move_to_ee_pose(
         self,
@@ -415,6 +426,7 @@ async def integration_test(node: Node, planner: MotionPlanner) -> None:
     """Test move plan functions."""
     logger = node.get_logger()
     try:
+        planner.check_services_up()
         logger.info('Service is ready. Waiting 5sec...')
         await asyncio.sleep(5.0)
 
