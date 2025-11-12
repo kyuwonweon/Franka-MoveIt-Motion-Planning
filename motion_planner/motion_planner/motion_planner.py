@@ -131,6 +131,9 @@ class MotionPlanner:
         self._logger.info(
             f'Received response goal handle: {response_goal.accepted}'
         )
+        if execute_immediately and response_goal.accepted:
+            result = await response_goal.get_result_async()
+            self._logger.info(f'Execution result: {result}')
         return response_goal
 
     async def move_to_joint_target(
