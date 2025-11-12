@@ -50,7 +50,7 @@ class MotionPlanner:
             callback_group=self._cbgroup,
         )
         self._logger = node.get_logger()
-        self._logger.error('Motion_Planner Started. Waiting for goal')
+        self._logger.info('Motion_Planner Started. Waiting for goal')
 
     async def move_to_ee_pose(
         self,
@@ -58,7 +58,7 @@ class MotionPlanner:
         goal_ee_orientation: np.ndarray | None,
         start_joints: np.ndarray | None = None,
         execute_immediately: bool = False,
-    ) -> ClientGoalHandle:
+    ) -> ClientGoalHandle | None:
         """
         Move from a specified end-effector configuration to another.
 
@@ -139,12 +139,13 @@ class MotionPlanner:
         self._logger.info('Sending goal to /move_action...')
         response_goal = await self._c_move_group.send_goal_async(goal_msg)
         if response_goal is None:
-            raise ValueError(
+            self._logger.error(
                 'Received response goal of None from send_goal_async.'
             )
-        self._logger.info(
-            f'Received response goal handle: {response_goal.accepted}'
-        )
+        else:
+            self._logger.info(
+                f'Received response goal handle: {response_goal.accepted}'
+            )
         return response_goal
 
     async def move_to_joint_target(
@@ -184,12 +185,17 @@ class MotionPlanner:
         response_goal_handle = await self._c_move_group.send_goal_async(
             goal_msg
         )
+        if response_goal_handle is None:
+            self._logger.error('Received None response_goal_handle')
+            return None
         self._logger.info(
             f'Received response goal handle: {response_goal_handle.accepted}'
         )
         self._logger.info('Awaiting the result')
         response = await response_goal_handle.get_result_async()
         self._logger.info(f'Received the result: {response}')
+        if response is None:
+            return None
         self._logger.info('Returning the result')
 
         return response.result
@@ -300,8 +306,7 @@ class MotionPlanner:
             ),
         }
         if named_config not in named_states:
-            self._logger.error('No such named configuration.')
-            return None
+            raise ValueError('No such named configuration.')
 
         goal_joints = named_states[named_config]
 
@@ -330,10 +335,15 @@ class MotionPlanner:
         goal_msg.planning_options = planning_options
         self._logger.info('Sending goal')
         response_goal = await self._c_move_group.send_goal_async(goal_msg)
+        if response_goal is None:
+            self._logger.error('response_goal=None')
+            return
         self._logger.info(
             f'Received response goal handle: {response_goal.accepted}'
         )
         response = await response_goal.get_result_async()
+        if response is None:
+            self._logger.error('response=None')
         return response.result
 
     def list_named_configs(self) -> list[str]:
