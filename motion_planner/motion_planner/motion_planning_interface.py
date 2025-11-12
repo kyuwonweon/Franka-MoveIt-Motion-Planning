@@ -4,9 +4,9 @@ from typing import Optional
 import numpy as np
 from rclpy.node import Node
 
-from .robot_state import RobotState
-from .planning_scene import PlanningScene
-from .motion_planner import MotionPlanner
+from motion_planner.robot_state import RobotState
+from motion_planner.planning_scene import PlanningScene
+from motion_planner.motion_planner import MotionPlanner
 
 
 class MotionPlanningInterface:
