@@ -22,7 +22,7 @@ class PlanningScene:
         self,
         node: Node,
         world_frame: str = 'base',
-        ee_link: str = 'fer_hand',
+        ee_link: str = 'fer_hand_tcp',
         planning_scene_topic: str = '/planning_scene',
     ) -> None:
         """Initialize the planning scene interface."""

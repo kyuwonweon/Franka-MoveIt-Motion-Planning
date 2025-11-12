@@ -26,9 +26,9 @@ class RobotStateTest(Node):
         super().__init__('robot_state_poll_test')
         self.rs = RobotState(
             node=self,
-            planning_group='fer_arm',
-            base_link='fer_link0',
-            ee_link='fer_hand',
+            planning_group='fer_manipulator',
+            base_link='base',
+            ee_link='fer_hand_tcp',
         )
         self.create_timer(1.0, self.test_robot_state)
 

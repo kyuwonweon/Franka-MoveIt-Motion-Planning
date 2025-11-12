@@ -11,7 +11,7 @@ def main():
     """Spin a node that publishes planning scene changes."""
     rclpy.init()
     node = rclpy.create_node('planning_scene_test')
-    ps = PlanningScene(node, world_frame='base', ee_link='fer_hand')
+    ps = PlanningScene(node, world_frame='base', ee_link='fer_hand_tcp')
 
     def _publish_scene():
         ps.add_box('box1', (0.05, 0.05, 0.1), (0.50, 0.0, 0.0))

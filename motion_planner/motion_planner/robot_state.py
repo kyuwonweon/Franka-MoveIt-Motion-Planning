@@ -25,9 +25,9 @@ class RobotState:
     def __init__(
         self,
         node: Node,
-        planning_group: str = 'fer_arm',
-        base_link: str = 'fer_link0',
-        ee_link: str = 'fer_hand',
+        planning_group: str = 'fer_manipulator',
+        base_link: str = 'base',
+        ee_link: str = 'fer_hand_tcp',
     ) -> None:
         """Initialize RobotState with ROS2 node and parameters."""
         self._node = node
@@ -54,11 +54,11 @@ class RobotState:
         """Update cached joint state whenever the robot publishes."""
         self._js_cache = msg
 
-    def current_joint_state(self) -> JointState:
+    def current_joint_state(self) -> JointState | None:
         """Return the latest /joint_states message."""
         return self._js_cache
 
-    def current_ee_pose(self) -> PoseStamped:
+    def current_ee_pose(self) -> PoseStamped | None:
         """Compute EE pose from current joints via FK."""
         js = self._js_cache
         if js is None:
