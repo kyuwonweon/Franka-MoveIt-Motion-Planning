@@ -36,10 +36,8 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            (
-                'motion_planner_integration_test = '
-                'motion_planner.motion_planner:main'
-            ),
+            'motion_planner_integration_test = '
+            'motion_planner.motion_planner:main',
             'planning_scene_test = motion_planner.planning_scene_test:main',
             'robot_state_test = motion_planner.robot_state_test:main',
             'pick_node = motion_planner.pick_node:main',
