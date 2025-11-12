@@ -46,7 +46,7 @@ class MotionPlanningInterface:
         )
 
         # Initialize MotionPlanner
-        self.planner = MotionPlanner(node=node)
+        self.planner = MotionPlanner(node, self.robot_state, self.scene)
 
         self.base_link = base_link
         self.ee_link = ee_link
