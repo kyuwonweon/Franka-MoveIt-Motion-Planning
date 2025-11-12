@@ -44,13 +44,26 @@ class MotionPlanner:
         self._c_move_group = ActionClient(
             node, MoveGroup, '/move_action', callback_group=self._cbgroup
         )
+        self._logger = node.get_logger()
         self._c_cartesian_path = self._node.create_client(
             GetCartesianPath,
             'compute_cartesian_path',
             callback_group=self._cbgroup,
         )
-        self._logger = node.get_logger()
-        self._logger.info('Motion_Planner Started. Waiting for goal')
+        idx = 0
+        while not (
+            self._c_cartesian_path.wait_for_service(timeout_sec=5.0)
+            and self._c_move_group.wait_for_server(timeout_sec=5.0)
+        ):
+            if idx >= 5:
+                self._logger.error('Service(s) not online.')
+                return
+            self._logger.warn(
+                'Still waiting for cartesian and/or move_group service(s)...'
+            )
+            idx += 1
+
+        self._logger.info('MotionPlanner initialized.')
 
     async def move_to_ee_pose(
         self,
@@ -400,15 +413,9 @@ class MotionPlanner:
 
 async def integration_test(node: Node, planner: MotionPlanner) -> None:
     """Test move plan functions."""
+    logger = node.get_logger()
     try:
-        node.get_logger().info('Waiting for /move_action server ')
-        # while not planner._c_move_group.wait_for_server(timeout_sec=5.0):
-        #    node.get_logger().warn('Still waiting for /move_action server')
-
-        # node.get_logger().info('/move_action server ready. Sending goal now')
-        while not planner._c_cartesian_path.wait_for_service(timeout_sec=5.0):
-            node.get_logger().warn('Still waiting for cartesian service')
-        node.get_logger().info('Service is ready.')
+        logger.info('Service is ready. Waiting 5sec...')
         await asyncio.sleep(5.0)
 
         # Test for joint state movement
