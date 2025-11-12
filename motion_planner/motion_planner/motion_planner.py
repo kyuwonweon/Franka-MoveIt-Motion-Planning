@@ -19,7 +19,7 @@ from moveit_msgs.msg import (
 from motion_planner.robot_state import RobotState as RS
 from moveit_msgs.srv import GetCartesianPath, GetCartesianPath_Response
 from moveit_msgs.msg import JointConstraint
-from geometry_msgs.msg import Pose, Quaternion
+from geometry_msgs.msg import Pose, Quaternion, PoseStamped
 from shape_msgs.msg import SolidPrimitive
 import asyncio
 import threading
@@ -31,7 +31,7 @@ class MotionPlanner:
     def __init__(self, node: Node, robot_state=RS):
         """Initialize the motion planner node."""
         self._node = node
-        self.robot_state = RS
+        self.robot_state = RS(node)
         self._cbgroup = MutuallyExclusiveCallbackGroup()
         self._c_move_group = ActionClient(
             node, MoveGroup, '/move_action', callback_group=self._cbgroup
@@ -236,7 +236,7 @@ class MotionPlanner:
         named_config: str,
         start_ee_pose: np.ndarray | None = None,
         execute_immediately: bool = False,
-    ) -> GetCartesianPath_Response:
+    ) -> MoveGroup.Result:
         """
         Plan a path from any valid starting pose to a named configuration.
 
@@ -252,13 +252,18 @@ class MotionPlanner:
             execute_immediately (bool): immediately execute the path
 
         Returns:
-            GetCartesianPath_Response: TODO figure out
+            MoveGroup.Result: TODO figure out
 
         """
+        goal_msg = MoveGroup.Goal()
         request = MotionPlanRequest()
         request.group_name = 'fer_manipulator'
+        request.num_planning_attempts = 5
+        request.allowed_planning_time = 10.0
+        request.max_velocity_scaling_factor = 0.1
+        request.max_acceleration_scaling_factor = 0.1
 
-        named_joint_states = {
+        named_states = {
             'ready': np.array(
                 [
                     0.0,
@@ -282,18 +287,42 @@ class MotionPlanner:
                 ]
             ),
         }
-        if named_config not in named_joint_states:
+        if named_config not in named_states:
             self._logger.error('No such named configuration.')
             return None
 
-        goal_joints = named_joint_states[named_config]
-        start_ik = await RS.inverse_kinematics(
-            self.robot_state, start_ee_pose, 'fer_manipulator'
-        )
-        request.start_state = start_ik.solution
+        goal_joints = named_states[named_config]
 
+        if start_ee_pose is not None:
+            msg = PoseStamped()
+            msg.header.frame_id = 'base'
+            msg.pose.position.x = start_ee_pose[0]
+            msg.pose.position.y = start_ee_pose[1]
+            msg.pose.position.z = start_ee_pose[2]
+            msg.pose.orientation.x = start_ee_pose[3]
+            msg.pose.orientation.y = start_ee_pose[4]
+            msg.pose.orientation.z = start_ee_pose[5]
+            msg.pose.orientation.w = start_ee_pose[6]
+            start_joint_state = self.robot_state.inverse_kinematics(msg)
+            if start_joint_state is None:
+                return None
+
+            start_state = RobotState()
+            start_state.joint_state = start_joint_state
+            request.start_state = start_state
         request.goal_constraints = self.joint_constraints(goal_joints)
-        return request
+
+        goal_msg.request = request
+        planning_options = PlanningOptions()
+        planning_options.plan_only = not execute_immediately
+        goal_msg.planning_options = planning_options
+        self._logger.info('Sending goal')
+        response_goal = await self._c_move_group.send_goal_async(goal_msg)
+        self._logger.info(
+            f'Received response goal handle: {response_goal.accepted}'
+        )
+        response = await response_goal.get_result_async()
+        return response.result
 
     def list_named_configs(self) -> list[str]:
         """Return a list of the named configs currently registered."""
@@ -391,27 +420,34 @@ async def integration_test(node: Node, planner: MotionPlanner) -> None:
 
         # Test for cartesian path
         # from ros2 param get /move_group robot_description_semantic - ready
-        start_joints_pose = np.array(
-            [0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785]
-        )
-        cartesian_goal_pose = np.array(
-            [0.0, 0, 0.0, -2.356, 0.0, 1.571, 0.785]
-        )
-        task = asyncio.create_task(
-            planner.plan_cartesian_path(
-                goal_ee_pose=cartesian_goal_pose,
-                start_ee_pose=start_joints_pose,
+        # start_joints_pose = np.array(
+        #    [0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785]
+        # )
+        # cartesian_goal_pose = np.array(
+        #    [0.0, 0, 0.0, -2.356, 0.0, 1.571, 0.785]
+        # )
+        # task = asyncio.create_task(
+        #    planner.plan_cartesian_path(
+        #        goal_ee_pose=cartesian_goal_pose,
+        #        start_ee_pose=start_joints_pose,
+        #        execute_immediately=True,
+        #    )
+        # )
+        # response = await task
+        # node.get_logger().info(
+        #    f'Cartesian path plan complete.'
+        #    f'Fraction of path found: {response.fraction}'
+
+        asyncio.create_task(
+            planner.plan_to_named_config(
+                named_config='extended',
+                start_ee_pose=None,
                 execute_immediately=True,
             )
         )
-        response = await task
-        node.get_logger().info(
-            f'Cartesian path plan complete.'
-            f'Fraction of path found: {response.fraction}'
-        )
+
     finally:
         node.get_logger().info('Integration test finished.')
-        rclpy.shutdown()
 
 
 def main():
@@ -430,6 +466,7 @@ def main():
         executor.shutdown()
         executor_thread.join()
         node.destroy_node()
+        rclpy.shutdown()
 
 
 if __name__ == '__main__':
