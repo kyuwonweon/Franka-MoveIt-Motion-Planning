@@ -16,6 +16,7 @@ from moveit_msgs.msg import (
     PlanningOptions,
     BoundingVolume,
 )
+from motion_planner.robot_state import RobotState as RS
 from moveit_msgs.srv import GetCartesianPath, GetCartesianPath_Response
 from moveit_msgs.msg import JointConstraint
 from geometry_msgs.msg import Pose, Quaternion, PoseStamped
@@ -27,11 +28,10 @@ import threading
 class MotionPlanner:
     """Briefly describes the motion planner class."""
 
-    def __init__(self, node, robot_state, planning_scene):
+    def __init__(self, node: Node, robot_state=RS):
         """Initialize the motion planner node."""
         self._node = node
-        self.robot_state = robot_state
-        self.planning_scene = planning_scene
+        self.robot_state = RS(node)
         self._cbgroup = MutuallyExclusiveCallbackGroup()
         self._c_move_group = ActionClient(
             node, MoveGroup, '/move_action', callback_group=self._cbgroup
