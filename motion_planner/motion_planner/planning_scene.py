@@ -27,17 +27,31 @@ class PlanningScene:
     ) -> None:
         """Initialize the planning scene interface."""
         self._node = node
-        self._frame = world_frame
+        self._world_frame = world_frame
         self._ee_link = ee_link
         self._scene_pub = node.create_publisher(PS, planning_scene_topic, 10)
 
-    def add_box(
+        # make a default pose for objects attached to the end-effector
+        pose = PoseStamped()
+        pose.pose.position.x = 0.0
+        pose.pose.position.y = 0.0
+        pose.pose.position.z = 1.0
+        pose.pose.orientation.w = 1.0
+        self._attached_obj_pose = pose.pose
+
+        self._obj_cache: dict[str, CollisionObject] = {}
+
+    def n_subscribers(self) -> int:
+        """Return the number of subscribers on the planning_scene topic."""
+        return self._scene_pub.get_subscription_count()
+
+    def _populate_box_collision_object(
         self,
         name: str,
         size: Tuple[float, float, float],
         position: Tuple[float, float, float],
-    ) -> None:
-        """Add boxes to the planning scene dynamically, at any location."""
+    ) -> CollisionObject:
+        """Populate the a CollisionObject for a box."""
         lx, ly, lz = size
         px, py, pz = position
 
@@ -46,19 +60,30 @@ class PlanningScene:
         prim.dimensions = [lx, ly, lz]
 
         pose = PoseStamped()
-        pose.header.frame_id = self._frame
+        pose.header.frame_id = self._world_frame
         pose.pose.position.x = px
         pose.pose.position.y = py
         pose.pose.position.z = pz
         pose.pose.orientation.w = 1.0
 
         co = CollisionObject()
-        co.header.frame_id = self._frame
+        co.header.frame_id = self._world_frame
         co.id = name
         co.primitives = [prim]
         co.primitive_poses = [pose.pose]
         co.operation = CollisionObject.ADD
 
+        self._obj_cache[name] = co
+        return co
+
+    def add_box(
+        self,
+        name: str,
+        size: Tuple[float, float, float],
+        position: Tuple[float, float, float],
+    ) -> None:
+        """Add boxes to the planning scene dynamically, at any location."""
+        co = self._populate_box_collision_object(name, size, position)
         scene = PS()
         scene.is_diff = True
         scene.world.collision_objects = [co]
@@ -67,7 +92,7 @@ class PlanningScene:
     def remove_world_object(self, name: str) -> None:
         """Remove boxes from the planning scene dynamically."""
         co = CollisionObject()
-        co.header.frame_id = self._frame
+        co.header.frame_id = self._world_frame
         co.id = name
         co.operation = CollisionObject.REMOVE
 
@@ -76,21 +101,30 @@ class PlanningScene:
         scene.world.collision_objects = [co]
         self._scene_pub.publish(scene)
 
+        self._obj_cache.pop(name)
+
     def attach_box(
         self,
         name: str,
     ) -> None:
         """Attach collision objects to the robot's end-effector."""
+        # make the object we're attaching
         aco = AttachedCollisionObject()
         aco.link_name = self._ee_link
-        aco.object.id = name
-        aco.object.operation = CollisionObject.ADD
+        aco.object = self._obj_cache[name]
         aco.touch_links = [self._ee_link]
+
+        # and remove the non-attached version of it
+        co = CollisionObject()
+        co.header.frame_id = self._world_frame
+        co.id = name
+        co.operation = CollisionObject.REMOVE
 
         scene = PS()
         scene.is_diff = True
         scene.robot_state.is_diff = True
         scene.robot_state.attached_collision_objects = [aco]
+        scene.world.collision_objects = [co]
         self._scene_pub.publish(scene)
 
     def detach_box(self, name: str) -> None:
@@ -100,10 +134,15 @@ class PlanningScene:
         aco.object.id = name
         aco.object.operation = CollisionObject.REMOVE
 
+        # and add it back into the world
+        co = self._obj_cache[name]
+        co.pose = aco.object.pose
+
         scene = PS()
         scene.is_diff = True
         scene.robot_state.is_diff = True
         scene.robot_state.attached_collision_objects = [aco]
+        scene.world.collision_objects = [co]
         self._scene_pub.publish(scene)
 
     def load_scene(self, params: Dict) -> None:

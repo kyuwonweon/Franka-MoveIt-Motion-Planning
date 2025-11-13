@@ -17,6 +17,7 @@ from moveit_msgs.msg import (
     PlanningOptions,
     BoundingVolume,
 )
+from motion_planner.robot_state import RobotState as RS
 from moveit_msgs.srv import GetCartesianPath
 from moveit_msgs.msg import JointConstraint
 from geometry_msgs.msg import Pose, Quaternion, PoseStamped
@@ -30,6 +31,9 @@ from motion_planner import robot_state, planning_scene
 class MotionPlanner:
     """Briefly describes the motion planner class."""
 
+    GRIPPER_OPEN = 0.03
+    GRIPPER_CLOSED = 0.001
+
     def __init__(
         self,
         node: Node,
@@ -38,8 +42,7 @@ class MotionPlanner:
     ):
         """Initialize the motion planner node."""
         self._node = node
-        self.robot_state = robot_state
-        self.planning_scene = planning_scene
+        self.robot_state = RS(node)
         self._cbgroup = MutuallyExclusiveCallbackGroup()
         self._c_move_group = ActionClient(
             node, MoveGroup, '/move_action', callback_group=self._cbgroup
@@ -54,7 +57,7 @@ class MotionPlanner:
         self._logger.info('MotionPlanner initialized.')
 
     def check_services_up(self) -> bool:
-        """Wait until services we depend upon are available."""
+        """Wait until services we depend upon are available. True if up."""
         if self._services_up:
             return True
 
@@ -160,17 +163,20 @@ class MotionPlanner:
         if start_joints is not None:
             request.start_state = self.start_state(start_joints)
 
-        self._logger.info('Sending goal to /move_action...')
-        response_goal = await self._c_move_group.send_goal_async(goal_msg)
-        if response_goal is None:
+        self._logger.info(
+            f'Sending goal to /move_action (pos:{goal_ee_position},'
+            f'ori:{goal_ee_orientation})...'
+        )
+        goal_handle = await self._c_move_group.send_goal_async(goal_msg)
+        if goal_handle is None:
             self._logger.error(
                 'Received response goal of None from send_goal_async.'
             )
         else:
             self._logger.info(
-                f'Received response goal handle: {response_goal.accepted}'
+                f'Received response goal handle: {goal_handle.accepted}'
             )
-        return response_goal
+        return goal_handle
 
     async def move_to_joint_target(
         self,
@@ -418,6 +424,55 @@ class MotionPlanner:
             constraints.joint_constraints.append(jointconstraint)  # type: ignore
         return [constraints]
 
+    async def gripper(
+        self,
+        offset: float,
+        execute_immediately: bool = False,
+    ) -> None:
+        """
+        Open and close the gripper.
+
+        Args:
+            offset(float): offset of each fingers from origin
+            execute_immediately (bool): immediately execute the path
+
+        """
+        goal_msg = MoveGroup.Goal()
+        request = MotionPlanRequest()
+        request.group_name = 'hand'
+        request.max_velocity_scaling_factor = 0.1
+        request.max_acceleration_scaling_factor = 0.1
+
+        constraints = Constraints()
+        for joint in ['fer_finger_joint1', 'fer_finger_joint2']:
+            jc = JointConstraint()
+            jc.joint_name = joint
+            jc.position = offset
+            jc.tolerance_above = 0.005
+            jc.tolerance_below = 0.005
+            jc.weight = 1.0
+            constraints.joint_constraints.append(jc)
+
+        request.goal_constraints = [constraints]
+        goal_msg.request = request
+        planning_options = PlanningOptions()
+        planning_options.plan_only = not execute_immediately
+        goal_msg.planning_options = planning_options
+
+        self._logger.info('Sending goal to /move_action...')
+        response_goal_handle = await self._c_move_group.send_goal_async(
+            goal_msg
+        )
+        self._logger.info(
+            f'Received response goal handle: {response_goal_handle.accepted}'
+        )
+        self._logger.info('Awaiting the result')
+        response = await response_goal_handle.get_result_async()
+        self._logger.debug(f'Received the result: {response}')
+        self._logger.info('Returning the result')
+
+        return response.result
+
 
 async def integration_test(node: Node, planner: MotionPlanner) -> None:
     """Test move plan functions."""
@@ -436,7 +491,7 @@ async def integration_test(node: Node, planner: MotionPlanner) -> None:
 
         # Test for ee pose movement
         ee_pos1 = np.array([0.3, 0.3, 0.5])
-        ee_orient1 = np.array([0.0, 0.0, 0.0, 1.0])
+        ee_orient1 = np.array([1.0, 0.0, 0.0, 0.0])
         node.get_logger().info('Starting end-effector pose motion test...')
 
         goal_handle = await planner.move_to_ee_pose(
@@ -474,6 +529,11 @@ async def integration_test(node: Node, planner: MotionPlanner) -> None:
             execute_immediately=True,
         )
         logger.info(f'NAMED CONFIG RESPONSE: {resp}')
+
+        # Test gripper open/close
+        await planner.gripper(offset=0.03, execute_immediately=True)
+        await asyncio.sleep(2.0)
+        await planner.gripper(offset=0.0, execute_immediately=True)
 
     finally:
         node.get_logger().info('Integration test finished.')

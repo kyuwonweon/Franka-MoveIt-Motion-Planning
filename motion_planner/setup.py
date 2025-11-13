@@ -22,6 +22,10 @@ setup(
             'share/' + package_name + '/launch/',
             ['launch/moplan.launch.py'],
         ),
+        (
+            'share/' + package_name + '/rviz/',
+            ['rviz/franka_live_config.rviz'],
+        ),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -40,6 +44,7 @@ setup(
             'motion_planner.motion_planner:main',
             'planning_scene_test = motion_planner.planning_scene_test:main',
             'robot_state_test = motion_planner.robot_state_test:main',
+            'pick_node = motion_planner.pick_node:main',
         ],
     },
 )
