@@ -1,19 +1,40 @@
 """Move the robot from one pose to another."""
 
+import os
 import time
 import numpy as np
 import asyncio
-
 import threading
 
-import rclpy
 import pytest
+from launch import LaunchDescription
+from launch.actions import IncludeLaunchDescription
+from launch.launch_description_sources import PythonLaunchDescriptionSource
+import launch_testing
+from ament_index_python.packages import get_package_share_directory
 
+import rclpy
 from rclpy.executors import MultiThreadedExecutor
 from geometry_msgs.msg import TransformStamped
 from tf2_ros import Buffer, TransformListener
 
 from motion_planner.motion_planning_interface import MotionPlanningInterface
+
+
+@pytest.mark.rostest
+def generate_test_description():
+    """Generate test description for the node."""
+    pkg_share = get_package_share_directory('franka_fer_moveit_config')
+    launch_file = os.path.join(pkg_share, 'launch', 'demo.launch.py')
+
+    return LaunchDescription(
+        [
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(launch_file)
+            ),
+            launch_testing.actions.ReadyToTest(),
+        ]
+    )
 
 
 def _pos_from_tf(tf: TransformStamped) -> np.ndarray:
