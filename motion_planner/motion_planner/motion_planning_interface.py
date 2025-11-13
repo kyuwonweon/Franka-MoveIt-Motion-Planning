@@ -80,10 +80,28 @@ class MotionPlanningInterface:
         self,
         goal_joints: np.ndarray,
         start_joints: Optional[np.ndarray] = None,
-    ):
+    ) -> None:
         """Asynchronously plan to a joint target."""
-        return await self.planner.move_to_joint_target(
+        await self.planner.move_to_joint_target(
             goal_joints=goal_joints,
             start_joints=start_joints,
             execute_immediately=True,
         )
+
+    async def grip(
+        self,
+        offset: float,
+    ) -> None:
+        """Block for control the gripper."""
+        await self.planner.gripper(
+            offset=offset,
+            execute_immediately=True,
+        )
+
+    async def grip_open(self) -> None:
+        """Open the gripper."""
+        await self.grip(self.planner.GRIPPER_OPEN)
+
+    async def grip_closed(self) -> None:
+        """Close the gripper."""
+        await self.grip(self.planner.GRIPPER_CLOSED)

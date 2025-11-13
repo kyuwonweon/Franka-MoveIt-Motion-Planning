@@ -31,6 +31,9 @@ from motion_planner import robot_state, planning_scene
 class MotionPlanner:
     """Briefly describes the motion planner class."""
 
+    GRIPPER_OPEN = 0.03
+    GRIPPER_CLOSED = 0.0
+
     def __init__(
         self,
         node: Node,
@@ -423,7 +426,7 @@ class MotionPlanner:
 
     async def gripper(
         self,
-        offset: float = 0.3,
+        offset: float,
         execute_immediately: bool = False,
     ) -> None:
         """
