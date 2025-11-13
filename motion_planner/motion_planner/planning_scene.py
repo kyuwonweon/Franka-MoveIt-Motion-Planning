@@ -136,6 +136,7 @@ class PlanningScene:
 
         # and add it back into the world
         co = self._obj_cache[name]
+        co.pose = aco.object.pose
 
         scene = PS()
         scene.is_diff = True

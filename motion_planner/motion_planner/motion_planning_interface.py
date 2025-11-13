@@ -26,6 +26,7 @@ class MotionPlanningInterface:
     ) -> None:
         """Initialize the MotionPlanningInterface with given parameters."""
         self.node = node
+        self.logger = node.get_logger()
 
         # Compose the three subsystems, sharing the same node
 
@@ -68,9 +69,12 @@ class MotionPlanningInterface:
         if goal_handle is not None:
             result_future = goal_handle.get_result_async()
             result = await result_future
-            self.node.get_logger().info(
-                f'MoveGroup action completed with status: {result.status}'
-            )
+            if result is None:
+                self.logger.error('Result of move action is None.')
+            else:
+                self.node.get_logger().info(
+                    f'MoveGroup action completed with status: {result.status}'
+                )
 
     async def go_to_joint_target(
         self,
