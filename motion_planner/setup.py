@@ -22,6 +22,10 @@ setup(
             'share/' + package_name + '/launch/',
             ['launch/moplan.launch.py'],
         ),
+        (
+            'share/' + package_name + '/rviz/',
+            ['rviz/franka_live_config.rviz'],
+        ),
     ],
     install_requires=['setuptools'],
     zip_safe=True,

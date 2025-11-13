@@ -1,13 +1,14 @@
 <launch>
   <arg name="demo" default="true"/>
+  <let name="rviz_config" value="rviz/franka_live_config.rviz"/>
 
   <arg name="table_size"   default="[0.6, 0.8, 0.05]"/>
-  <arg name="table_xyz"    default="[0.5, 0.0, 0.25]"/>
+  <arg name="table_xyz"    default="[0.5, 0.0, 0.0]"/>
   <arg name="object_size"  default="[0.04, 0.04, 0.04]"/>
-  <arg name="object_xyz"   default="[0.50, -0.25, 0.31]"/>
+  <arg name="object_xyz"   default="[0.50, -0.25, 0.07]"/>
   <arg name="obstacle_size" default="[0.25, 0.05, 0.20]"/>
-  <arg name="obstacle_xyz"  default="[0.55, 0.00, 0.35]"/>
-  <arg name="place_xyz"     default="[0.50, 0.20, 0.31]"/>
+  <arg name="obstacle_xyz"  default="[0.55, 0.00, 0.10]"/>
+  <arg name="place_xyz"     default="[0.50, 0.20, 0.02]"/>
   <arg name="approach_dz"   default="0.10"/>
   <arg name="lift_dz"       default="0.10"/>
   <arg name="ee_orientation" default="[1.0, 0.0, 0.0, 0.0]"/>
@@ -17,9 +18,9 @@
       file="$(find-pkg-share franka_fer_moveit_config)/launch/demo.launch.py"/>
   </group>
 
-  <!-- <group unless="$(var demo)"> -->
-  <node pkg="rviz2" exec="rviz2" output="log"/>
-  <!-- </group> -->
+  <group unless="$(var demo)">
+      <node pkg="rviz2" exec="rviz2" output="screen" args="-d $(find-pkg-share motion_planner)/$(var rviz_config)"/> 
+  </group>
 
   <node pkg="motion_planner" exec="pick_node" output="screen">
     <param name="table.size" value="$(var table_size)"/>

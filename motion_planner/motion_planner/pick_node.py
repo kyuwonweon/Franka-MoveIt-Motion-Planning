@@ -187,8 +187,8 @@ class PickNode(Node):
         # Attach at the TCP; PlanningScene should use ee_link frame.
         self.scene.attach_box('target_obj')
 
-        log('Close gripper...')
-        await self.mpi.grip_closed()
+        # log('Close gripper...')
+        # await self.mpi.grip_closed()
 
         log('Lift...')
         await self.mpi.go_to_ee_pose(
@@ -206,8 +206,8 @@ class PickNode(Node):
             orientation_xyzw=ori_xyzw,
         )
 
-        log('Open gripper...')
-        await self.mpi.grip_open()
+        # log('Open gripper...')
+        # await self.mpi.grip_open()
 
         log('Release...')
         self.scene.detach_box('target_obj')
@@ -260,7 +260,7 @@ class PickNode(Node):
             self._is_running = True
             asyncio.run(self._run_ready())
         except Exception as e:  # noqa: BLE001
-            self.get_logger().error(f'pick task failed: {e}')
+            self.get_logger().error(f'ready task failed: {e}')
         finally:
             self._is_running = False
 
