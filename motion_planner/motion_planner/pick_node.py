@@ -153,6 +153,10 @@ class PickNode(Node):
             self.get_parameter('ee.orientation_xyzw').value,
             dtype=float,  # type: ignore
         )
+        object_size = np.array(
+            self.get_parameter('object.size').value  # type: ignore
+        )
+        gripper_closed_offset = object_size[1] / 2.0
 
         approach = np.array(
             [obj_xyz[0], obj_xyz[1], obj_xyz[2] + approach_dz], dtype=float
@@ -168,35 +172,35 @@ class PickNode(Node):
 
         log = self.get_logger().info
 
-        log('Open gripper...')
+        log('OPEN GRIPPER...\n\n')
         await self.mpi.grip_open()
 
-        log('Move above object...')
+        log('MOVE ABOVE OBJECT...\n\n')
         await self.mpi.go_to_ee_pose(
             position_xyz=approach,
             orientation_xyzw=ori_xyzw,
         )
 
-        log('Descend to grasp...')
+        log('DESCEND TO GRASP...\n\n')
         await self.mpi.go_to_ee_pose(
             position_xyz=grasp,
             orientation_xyzw=ori_xyzw,
         )
 
-        log('Attach object...')
+        log('ATTACH OBJECT...\n\n')
         # Attach at the TCP; PlanningScene should use ee_link frame.
         self.scene.attach_box('target_obj')
 
-        # log('Close gripper...')
-        # await self.mpi.grip_closed()
+        log('CLOSE GRIPPER...\n\n')
+        await self.mpi.grip(gripper_closed_offset)
 
-        log('Lift...')
+        log('LIFT...\n\n')
         await self.mpi.go_to_ee_pose(
             position_xyz=lift,
             orientation_xyzw=ori_xyzw,
         )
 
-        log('Carry to place...')
+        log('CARRY TO PLACE...\n\n')
         await self.mpi.go_to_ee_pose(
             position_xyz=place_up,
             orientation_xyzw=ori_xyzw,
@@ -206,13 +210,13 @@ class PickNode(Node):
             orientation_xyzw=ori_xyzw,
         )
 
-        # log('Open gripper...')
-        # await self.mpi.grip_open()
+        log('OPEN GRIPPER...\n\n')
+        await self.mpi.grip_open()
 
-        log('Release...')
+        log('RELEASE...\n\n')
         self.scene.detach_box('target_obj')
 
-        log('Retreat...')
+        log('RETREAT...\n\n')
         await self.mpi.go_to_ee_pose(
             position_xyz=place_up,
             orientation_xyzw=ori_xyzw,

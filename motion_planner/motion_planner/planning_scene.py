@@ -30,6 +30,11 @@ class PlanningScene:
         self._world_frame = world_frame
         self._ee_link = ee_link
         self._scene_pub = node.create_publisher(PS, planning_scene_topic, 10)
+        self._links_to_ignore_contact = [
+            ee_link,
+            'fer_leftfinger',
+            'fer_rightfinger',
+        ]
 
         # make a default pose for objects attached to the end-effector
         pose = PoseStamped()
@@ -112,7 +117,7 @@ class PlanningScene:
         aco = AttachedCollisionObject()
         aco.link_name = self._ee_link
         aco.object = self._obj_cache[name]
-        aco.touch_links = [self._ee_link]
+        aco.touch_links = self._links_to_ignore_contact
 
         # and remove the non-attached version of it
         co = CollisionObject()

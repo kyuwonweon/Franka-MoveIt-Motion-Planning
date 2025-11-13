@@ -15,15 +15,18 @@ from moveit_msgs.msg import (
     PositionConstraint,
     OrientationConstraint,
     PlanningOptions,
+    RobotTrajectory,
     BoundingVolume,
 )
 from motion_planner.robot_state import RobotState as RS
 from moveit_msgs.srv import GetCartesianPath
 from moveit_msgs.msg import JointConstraint
 from geometry_msgs.msg import Pose, Quaternion, PoseStamped
+from trajectory_msgs.msg import JointTrajectoryPoint
 from shape_msgs.msg import SolidPrimitive
 import asyncio
 import threading
+import yaml
 
 from motion_planner import robot_state, planning_scene
 
@@ -31,8 +34,8 @@ from motion_planner import robot_state, planning_scene
 class MotionPlanner:
     """Briefly describes the motion planner class."""
 
-    GRIPPER_OPEN = 0.03
-    GRIPPER_CLOSED = 0.001
+    GRIPPER_MAX_OPEN = 0.031
+    GRIPPER_CLOSED = 0.0
 
     def __init__(
         self,
@@ -459,7 +462,9 @@ class MotionPlanner:
         planning_options.plan_only = not execute_immediately
         goal_msg.planning_options = planning_options
 
-        self._logger.info('Sending goal to /move_action...')
+        self._logger.info(
+            f'GRIPPING to {offset}: Sending goal to /move_action...'
+        )
         response_goal_handle = await self._c_move_group.send_goal_async(
             goal_msg
         )
@@ -472,6 +477,63 @@ class MotionPlanner:
         self._logger.info('Returning the result')
 
         return response.result
+
+    def save_plan(self, trajectory: RobotTrajectory, file_path: str) -> None:
+        """
+        Save planned trajectory.
+
+        Args:
+            trajectory (moveit_msgs/RobotTrajectory): Trajectory to be saved.
+            file_path (str) : path to where the yaml file will be saved.
+
+        """
+        data = {
+            'joint_names': list(trajectory.joint_trajectory.joint_names),
+            'points': [],
+        }
+
+        for point in trajectory.joint_trajectory.points:
+            data['points'].append(
+                {
+                    'positions': list(point.positions),
+                    'velocities': list(point.velocities),
+                    'accelerations': list(point.accelerations),
+                    'time_from_start': {
+                        'sec': point.time_from_start.sec,
+                        'nanosec': point.time_from_start.nanosec,
+                    },
+                }
+            )
+
+        with open(file_path, 'w') as f:
+            yaml.dump(data, f)
+        self.node.get_logger().info(f'Trajectory saved to {file_path}')
+
+    def load_plan(self, file_path: str) -> RobotTrajectory:
+        """
+        Open saved planned trajectory for inspection.
+
+        Args:
+            file_path (str): path to the saved file.
+
+        """
+        with open(file_path, 'r') as f:
+            data = yaml.safe_load(f)
+
+        traj = RobotTrajectory()
+        traj.joint_trajectory.joint_names = data['joint_names']
+
+        for pt in data['points']:
+            p = JointTrajectoryPoint()
+            p.positions = pt['positions']
+            p.velocities = pt['velocities']
+            p.accelerations = pt['accelerations']
+            p.time_from_start.sec = pt['time_from_start']['sec']
+            p.time_from_start.nanosec = pt['time_from_start']['nanosec']
+            traj.joint_trajectory.points.append(p)
+
+        self.node.get_logger().info(f'Loaded trajectory from {file_path}')
+        return traj
 
 
 async def integration_test(node: Node, planner: MotionPlanner) -> None:
