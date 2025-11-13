@@ -1,4 +1,3 @@
-# pick_node.py
 """
 pick_node.
 
@@ -28,7 +27,6 @@ from motion_planner.motion_planning_interface import MotionPlanningInterface
 from motion_planner.planning_scene import PlanningScene
 
 # Optional service type import (only for readiness check)
-from moveit_msgs.srv import GetPlanningScene  # provided by move_group
 
 
 class PickNode(Node):
@@ -77,7 +75,7 @@ class PickNode(Node):
 
         self.get_logger().info(
             'pick_node ready. Call: '
-            'ros2 service call /pick std_srvs/srv/Trigger {}'
+            r'ros2 service call /pick std_srvs/srv/Trigger {}'
         )
 
     # ---------- readiness & scene bootstrap ----------
@@ -88,11 +86,7 @@ class PickNode(Node):
 
         This is a robust way to tell the PlanningSceneMonitor is alive.
         """
-        client = self.create_client(GetPlanningScene, '/get_planning_scene')
-        ready = client.wait_for_service(timeout_sec=0.1)
-        # The client object is ephemeral; destroy to avoid handle leaks.
-        self.destroy_client(client)
-        return ready
+        return self.mpi.scene.n_subscribers() >= 1
 
     def _republish_scene_burst(
         self,
@@ -100,12 +94,12 @@ class PickNode(Node):
         interval_sec: float = 0.25,
     ) -> None:
         """Re-publish collision objects to avoid race conditions."""
-        table_lwh = tuple(self.get_parameter('table.size').value)  # type: ignore
-        table_xyz = tuple(self.get_parameter('table.xyz').value)  # type: ignore
-        obj_lwh = tuple(self.get_parameter('object.size').value)  # type: ignore
-        obj_xyz = tuple(self.get_parameter('object.xyz').value)  # type: ignore
-        obs_lwh = tuple(self.get_parameter('obstacle.size').value)  # type: ignore
-        obs_xyz = tuple(self.get_parameter('obstacle.xyz').value)  # type: ignore
+        table_lwh = tuple(self.get_parameter('table.size').value)
+        table_xyz = tuple(self.get_parameter('table.xyz').value)
+        obj_lwh = tuple(self.get_parameter('object.size').value)
+        obj_xyz = tuple(self.get_parameter('object.xyz').value)
+        obs_lwh = tuple(self.get_parameter('obstacle.size').value)
+        obs_xyz = tuple(self.get_parameter('obstacle.xyz').value)
 
         for i in range(repeats):
             # Deterministic IDs; repeated ADDs are idempotent for same id.
@@ -122,10 +116,12 @@ class PickNode(Node):
         if self._scene_bootstrapped:
             return
 
+        self.get_logger().warn('helloworld')
         # Wait for MoveGroup service to be available (~5 s overall at 10 Hz).
         if not self._move_group_ready():
             return
 
+        self.get_logger().warn('nope')
         self.get_logger().info(
             'move_group is ready. Bootstrapping planning scene...'
         )
@@ -149,9 +145,6 @@ class PickNode(Node):
 
         obj_xyz: Tuple[float, float, float] = tuple(
             self.get_parameter('object.xyz').value  # type: ignore
-        )
-        obj_lwh: Tuple[float, float, float] = tuple(
-            self.get_parameter('object.size').value  # type: ignore
         )
         place_xyz: Tuple[float, float, float] = tuple(
             self.get_parameter('place.xyz').value  # type: ignore
@@ -195,7 +188,7 @@ class PickNode(Node):
 
         log('Attach object...')
         # Attach at the TCP; PlanningScene should use ee_link frame.
-        self.scene.attach_box('target_obj', obj_lwh, (0.0, 0.0, 0.0))
+        self.scene.attach_box('target_obj')
 
         log('Lift...')
         await self.mpi.plan_to_ee_pose_async(
@@ -217,7 +210,7 @@ class PickNode(Node):
         )
 
         log('Release...')
-        self.scene.detach_box('target_obj', obj_lwh, tuple(place))
+        self.scene.detach_box('target_obj')
 
         log('Retreat...')
         await self.mpi.plan_to_ee_pose_async(
@@ -240,7 +233,10 @@ class PickNode(Node):
 
     def on_pick(self, req: Trigger.Request, _ctx) -> Trigger.Response:
         """Service callback: start the sequence in background."""
-        del req  # unused
+        self.get_logger().info(
+            'pick service called. Triggering pick & place...'
+        )
+
         resp = Trigger.Response()
         if self._is_running:
             resp.success = False

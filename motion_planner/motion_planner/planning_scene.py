@@ -41,6 +41,10 @@ class PlanningScene:
 
         self._obj_cache: dict[str, CollisionObject] = {}
 
+    def n_subscribers(self) -> int:
+        """Return the number of subscribers on the planning_scene topic."""
+        return self._scene_pub.get_subscription_count()
+
     def _populate_box_collision_object(
         self,
         name: str,

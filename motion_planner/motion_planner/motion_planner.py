@@ -54,7 +54,7 @@ class MotionPlanner:
         self._logger.info('MotionPlanner initialized.')
 
     def check_services_up(self) -> bool:
-        """Wait until services we depend upon are available."""
+        """Wait until services we depend upon are available. True if up."""
         if self._services_up:
             return True
 
