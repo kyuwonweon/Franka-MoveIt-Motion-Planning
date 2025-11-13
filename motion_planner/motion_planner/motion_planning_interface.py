@@ -52,30 +52,34 @@ class MotionPlanningInterface:
         self.ee_link = ee_link
         self.group = planning_group
 
-    async def plan_to_ee_pose_async(
+    async def go_to_ee_pose(
         self,
         position_xyz: Optional[np.ndarray],
         orientation_xyzw: Optional[np.ndarray],
         start_joints: Optional[np.ndarray] = None,
-        execute_immediately: bool = False,
     ):
         """Asynchronously plan to an end-effector pose."""
-        return await self.planner.move_to_ee_pose(
+        goal_handle = await self.planner.move_to_ee_pose(
             goal_ee_position=position_xyz,
             goal_ee_orientation=orientation_xyzw,
             start_joints=start_joints,
-            execute_immediately=execute_immediately,
+            execute_immediately=True,
         )
+        if goal_handle is not None:
+            result_future = goal_handle.get_result_async()
+            result = await result_future
+            self.node.get_logger().info(
+                f'MoveGroup action completed with status: {result.status}'
+            )
 
-    async def plan_to_joint_target_async(
+    async def go_to_joint_target(
         self,
         goal_joints: np.ndarray,
         start_joints: Optional[np.ndarray] = None,
-        execute_immediately: bool = False,
     ):
         """Asynchronously plan to a joint target."""
         return await self.planner.move_to_joint_target(
             goal_joints=goal_joints,
             start_joints=start_joints,
-            execute_immediately=execute_immediately,
+            execute_immediately=True,
         )

@@ -168,18 +168,15 @@ class PickNode(Node):
         log = self.get_logger().info
 
         log('Move above object...')
-        await self.mpi.plan_to_ee_pose_async(
+        await self.mpi.go_to_ee_pose(
             position_xyz=approach,
             orientation_xyzw=ori_xyzw,
-            execute_immediately=True,
         )
-        return
 
         log('Descend to grasp...')
-        await self.mpi.plan_to_ee_pose_async(
+        await self.mpi.go_to_ee_pose(
             position_xyz=grasp,
             orientation_xyzw=ori_xyzw,
-            execute_immediately=True,
         )
 
         log('Attach object...')
@@ -187,36 +184,32 @@ class PickNode(Node):
         self.scene.attach_box('target_obj')
 
         log('Lift...')
-        await self.mpi.plan_to_ee_pose_async(
+        await self.mpi.go_to_ee_pose(
             position_xyz=lift,
             orientation_xyzw=ori_xyzw,
-            execute_immediately=True,
         )
 
         log('Carry to place...')
-        await self.mpi.plan_to_ee_pose_async(
+        await self.mpi.go_to_ee_pose(
             position_xyz=place_up,
             orientation_xyzw=ori_xyzw,
-            execute_immediately=True,
         )
-        await self.mpi.plan_to_ee_pose_async(
+        await self.mpi.go_to_ee_pose(
             position_xyz=place,
             orientation_xyzw=ori_xyzw,
-            execute_immediately=True,
         )
 
         log('Release...')
         self.scene.detach_box('target_obj')
 
         log('Retreat...')
-        await self.mpi.plan_to_ee_pose_async(
+        await self.mpi.go_to_ee_pose(
             position_xyz=place_up,
             orientation_xyzw=ori_xyzw,
-            execute_immediately=True,
         )
 
         log('Pick-and-place complete.')
-        return True
+        return
 
     def _run_pick_in_thread(self) -> None:
         """Worker thread that runs the async sequence."""

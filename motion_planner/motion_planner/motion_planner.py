@@ -164,16 +164,16 @@ class MotionPlanner:
             f'Sending goal to /move_action (pos:{goal_ee_position},'
             f'ori:{goal_ee_orientation})...'
         )
-        response_goal = await self._c_move_group.send_goal_async(goal_msg)
-        if response_goal is None:
+        goal_handle = await self._c_move_group.send_goal_async(goal_msg)
+        if goal_handle is None:
             self._logger.error(
                 'Received response goal of None from send_goal_async.'
             )
         else:
             self._logger.info(
-                f'Received response goal handle: {response_goal.accepted}'
+                f'Received response goal handle: {goal_handle.accepted}'
             )
-        return response_goal
+        return goal_handle
 
     async def move_to_joint_target(
         self,
