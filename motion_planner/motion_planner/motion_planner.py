@@ -31,6 +31,9 @@ from motion_planner import robot_state, planning_scene
 class MotionPlanner:
     """Briefly describes the motion planner class."""
 
+    GRIPPER_OPEN = 0.03
+    GRIPPER_CLOSED = 0.001
+
     def __init__(
         self,
         node: Node,
@@ -54,7 +57,7 @@ class MotionPlanner:
         self._logger.info('MotionPlanner initialized.')
 
     def check_services_up(self) -> bool:
-        """Wait until services we depend upon are available."""
+        """Wait until services we depend upon are available. True if up."""
         if self._services_up:
             return True
 
@@ -160,17 +163,20 @@ class MotionPlanner:
         if start_joints is not None:
             request.start_state = self.start_state(start_joints)
 
-        self._logger.info('Sending goal to /move_action...')
-        response_goal = await self._c_move_group.send_goal_async(goal_msg)
-        if response_goal is None:
+        self._logger.info(
+            f'Sending goal to /move_action (pos:{goal_ee_position},'
+            f'ori:{goal_ee_orientation})...'
+        )
+        goal_handle = await self._c_move_group.send_goal_async(goal_msg)
+        if goal_handle is None:
             self._logger.error(
                 'Received response goal of None from send_goal_async.'
             )
         else:
             self._logger.info(
-                f'Received response goal handle: {response_goal.accepted}'
+                f'Received response goal handle: {goal_handle.accepted}'
             )
-        return response_goal
+        return goal_handle
 
     async def move_to_joint_target(
         self,
@@ -420,7 +426,7 @@ class MotionPlanner:
 
     async def gripper(
         self,
-        offset: float = 0.3,
+        offset: float,
         execute_immediately: bool = False,
     ) -> None:
         """
@@ -462,7 +468,7 @@ class MotionPlanner:
         )
         self._logger.info('Awaiting the result')
         response = await response_goal_handle.get_result_async()
-        self._logger.info(f'Received the result: {response}')
+        self._logger.debug(f'Received the result: {response}')
         self._logger.info('Returning the result')
 
         return response.result
