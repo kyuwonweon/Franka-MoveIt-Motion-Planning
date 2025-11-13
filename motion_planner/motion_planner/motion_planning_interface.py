@@ -106,7 +106,7 @@ class MotionPlanningInterface:
 
     async def grip_open(self) -> None:
         """Open the gripper."""
-        await self.grip(self.planner.GRIPPER_OPEN)
+        await self.grip(self.planner.GRIPPER_MAX_OPEN)
 
     async def grip_closed(self) -> None:
         """Close the gripper."""
