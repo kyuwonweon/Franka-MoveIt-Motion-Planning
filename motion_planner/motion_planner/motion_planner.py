@@ -31,8 +31,8 @@ from motion_planner import robot_state, planning_scene
 class MotionPlanner:
     """Briefly describes the motion planner class."""
 
-    GRIPPER_OPEN = 0.03
-    GRIPPER_CLOSED = 0.001
+    GRIPPER_MAX_OPEN = 0.031
+    GRIPPER_CLOSED = 0.0
 
     def __init__(
         self,
@@ -459,7 +459,9 @@ class MotionPlanner:
         planning_options.plan_only = not execute_immediately
         goal_msg.planning_options = planning_options
 
-        self._logger.info('Sending goal to /move_action...')
+        self._logger.info(
+            f'GRIPPING to {offset}: Sending goal to /move_action...'
+        )
         response_goal_handle = await self._c_move_group.send_goal_async(
             goal_msg
         )
