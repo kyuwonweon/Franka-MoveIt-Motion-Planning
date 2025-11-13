@@ -18,7 +18,7 @@ from moveit_msgs.msg import (
     BoundingVolume,
 )
 from motion_planner.robot_state import RobotState as RS
-from moveit_msgs.srv import GetCartesianPath, GetCartesianPath_Response
+from moveit_msgs.srv import GetCartesianPath
 from moveit_msgs.msg import JointConstraint
 from geometry_msgs.msg import Pose, Quaternion, PoseStamped
 from shape_msgs.msg import SolidPrimitive
@@ -485,7 +485,7 @@ async def integration_test(node: Node, planner: MotionPlanner) -> None:
 
         # Test for ee pose movement
         ee_pos1 = np.array([0.3, 0.3, 0.5])
-        ee_orient1 = np.array([0.0, 0.0, 0.0, 1.0])
+        ee_orient1 = np.array([1.0, 0.0, 0.0, 0.0])
         node.get_logger().info('Starting end-effector pose motion test...')
 
         goal_handle = await planner.move_to_ee_pose(
@@ -523,6 +523,11 @@ async def integration_test(node: Node, planner: MotionPlanner) -> None:
             execute_immediately=True,
         )
         logger.info(f'NAMED CONFIG RESPONSE: {resp}')
+
+        # Test gripper open/close
+        await planner.gripper(offset=0.03, execute_immediately=True)
+        await asyncio.sleep(2.0)
+        await planner.gripper(offset=0.0, execute_immediately=True)
 
     finally:
         node.get_logger().info('Integration test finished.')
