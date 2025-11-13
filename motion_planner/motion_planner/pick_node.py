@@ -14,7 +14,6 @@ from __future__ import annotations
 import asyncio
 import threading
 import time
-from typing import Tuple
 
 import numpy as np
 import rclpy
@@ -116,12 +115,10 @@ class PickNode(Node):
         if self._scene_bootstrapped:
             return
 
-        self.get_logger().warn('helloworld')
         # Wait for MoveGroup service to be available (~5 s overall at 10 Hz).
         if not self._move_group_ready():
             return
 
-        self.get_logger().warn('nope')
         self.get_logger().info(
             'move_group is ready. Bootstrapping planning scene...'
         )
@@ -131,7 +128,7 @@ class PickNode(Node):
 
     # ---------- pick workflow ----------
 
-    async def do_pick_place(self) -> bool:
+    async def do_pick_place(self) -> None:
         """Execute the pick-and-place sequence asynchronously."""
         # If /pick is called early, enforce scene bootstrap first.
         deadline = self.get_clock().now() + Duration(seconds=5.0)
@@ -143,10 +140,10 @@ class PickNode(Node):
             # As a last resort, republish a short burst synchronously.
             self._republish_scene_burst(repeats=3, interval_sec=0.2)
 
-        obj_xyz: Tuple[float, float, float] = tuple(
+        obj_xyz: tuple[float, float, float] = tuple(
             self.get_parameter('object.xyz').value  # type: ignore
         )
-        place_xyz: Tuple[float, float, float] = tuple(
+        place_xyz: tuple[float, float, float] = tuple(
             self.get_parameter('place.xyz').value  # type: ignore
         )
         approach_dz: float = float(self.get_parameter('approach_dz').value)
@@ -159,13 +156,11 @@ class PickNode(Node):
         approach = np.array(
             [obj_xyz[0], obj_xyz[1], obj_xyz[2] + approach_dz], dtype=float
         )
-        grasp = np.array([obj_xyz[0], obj_xyz[1], obj_xyz[2]], dtype=float)
+        grasp = np.array(obj_xyz, dtype=float)
         lift = np.array(
             [obj_xyz[0], obj_xyz[1], obj_xyz[2] + lift_dz], dtype=float
         )
-        place = np.array(
-            [place_xyz[0], place_xyz[1], place_xyz[2]], dtype=float
-        )
+        place = np.array(place_xyz, dtype=float)
         place_up = np.array(
             [place_xyz[0], place_xyz[1], place_xyz[2] + lift_dz], dtype=float
         )
