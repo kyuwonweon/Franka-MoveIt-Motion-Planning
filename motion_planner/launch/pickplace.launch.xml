@@ -17,9 +17,9 @@
       file="$(find-pkg-share franka_fer_moveit_config)/launch/demo.launch.py"/>
   </group>
 
-  <group unless="$(var demo)">
-    <node pkg="rviz2" exec="rviz2" output="log"/>
-  </group>
+  <!-- <group unless="$(var demo)"> -->
+  <node pkg="rviz2" exec="rviz2" output="log"/>
+  <!-- </group> -->
 
   <node pkg="motion_planner" exec="pick_node" output="screen">
     <param name="table.size" value="$(var table_size)"/>

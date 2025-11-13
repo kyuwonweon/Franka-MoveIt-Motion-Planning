@@ -98,6 +98,21 @@ class MotionPlanningInterface:
             execute_immediately=True,
         )
 
+    async def ready(self) -> None:
+        """Return the robot to the ready state."""
+        goal_handle = await self.planner.plan_to_named_config(
+            'ready', execute_immediately=True
+        )
+        if goal_handle is not None:
+            result_future = goal_handle.get_result_async()
+            result = await result_future
+            if result is None:
+                self.logger.error('Result of move action is None.')
+            else:
+                self.node.get_logger().info(
+                    f'MoveGroup action completed with status: {result.status}'
+                )
+
     async def grip_open(self) -> None:
         """Open the gripper."""
         await self.grip(self.planner.GRIPPER_OPEN)

@@ -32,7 +32,7 @@ class MotionPlanner:
     """Briefly describes the motion planner class."""
 
     GRIPPER_OPEN = 0.03
-    GRIPPER_CLOSED = 0.0
+    GRIPPER_CLOSED = 0.001
 
     def __init__(
         self,
@@ -468,7 +468,7 @@ class MotionPlanner:
         )
         self._logger.info('Awaiting the result')
         response = await response_goal_handle.get_result_async()
-        self._logger.info(f'Received the result: {response}')
+        self._logger.debug(f'Received the result: {response}')
         self._logger.info('Returning the result')
 
         return response.result

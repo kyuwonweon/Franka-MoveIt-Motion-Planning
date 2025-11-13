@@ -57,7 +57,8 @@ class PickNode(Node):
         self.scene: PlanningScene = self.mpi.scene
 
         # Service API
-        self._srv = self.create_service(Trigger, 'pick', self.on_pick)
+        self._pick_srv = self.create_service(Trigger, 'pick', self.on_pick)
+        self._ready_srv = self.create_service(Trigger, 'ready', self.on_ready)
 
         # Internal flags
         self._is_running = False
@@ -182,12 +183,12 @@ class PickNode(Node):
             orientation_xyzw=ori_xyzw,
         )
 
-        log('Close gripper...')
-        await self.mpi.grip_closed()
-
         log('Attach object...')
         # Attach at the TCP; PlanningScene should use ee_link frame.
         self.scene.attach_box('target_obj')
+
+        log('Close gripper...')
+        await self.mpi.grip_closed()
 
         log('Lift...')
         await self.mpi.go_to_ee_pose(
@@ -245,6 +246,25 @@ class PickNode(Node):
         t = threading.Thread(target=self._run_pick_in_thread, daemon=True)
         t.start()
 
+        resp.success = True
+        resp.message = 'complete'
+        return resp
+
+    async def _run_ready(self) -> None:
+        await self.mpi.ready()
+
+    def on_ready(self, req: Trigger.Request, _ctx) -> Trigger.Response:
+        """Perform ready service callback."""
+        self.get_logger().info('Returning to the ready position...')
+        try:
+            self._is_running = True
+            asyncio.run(self._run_ready())
+        except Exception as e:  # noqa: BLE001
+            self.get_logger().error(f'pick task failed: {e}')
+        finally:
+            self._is_running = False
+
+        resp = Trigger.Response()
         resp.success = True
         resp.message = 'started'
         return resp
