@@ -179,6 +179,9 @@ class PickNode(Node):
 
         log = self.get_logger().info
 
+        log('Open gripper (ready position)...')
+        await self.mpi.grip_open()
+
         log('Move above object...')
         await self.mpi.plan_to_ee_pose_async(
             position_xyz=approach,
@@ -193,9 +196,13 @@ class PickNode(Node):
             execute_immediately=True,
         )
 
+        log('Close gripper...')
+        await self.mpi.grip_closed()
+
+        # SWAPPED
         log('Attach object...')
         # Attach at the TCP; PlanningScene should use ee_link frame.
-        self.scene.attach_box('target_obj', obj_lwh, (0.0, 0.0, 0.0))
+        self.scene.attach_box('target_obj')
 
         log('Lift...')
         await self.mpi.plan_to_ee_pose_async(
@@ -215,6 +222,9 @@ class PickNode(Node):
             orientation_xyzw=ori_xyzw,
             execute_immediately=True,
         )
+
+        log('Open gripper (finish position)...')
+        await self.mpi.grip_open()
 
         log('Release...')
         self.scene.detach_box('target_obj', obj_lwh, tuple(place))
