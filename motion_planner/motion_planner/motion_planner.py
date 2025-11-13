@@ -160,7 +160,10 @@ class MotionPlanner:
         if start_joints is not None:
             request.start_state = self.start_state(start_joints)
 
-        self._logger.info('Sending goal to /move_action...')
+        self._logger.info(
+            f'Sending goal to /move_action (pos:{goal_ee_position},'
+            f'ori:{goal_ee_orientation})...'
+        )
         response_goal = await self._c_move_group.send_goal_async(goal_msg)
         if response_goal is None:
             self._logger.error(

@@ -45,7 +45,7 @@ class PickNode(Node):
         self.declare_parameter('place.xyz', [0.50, 0.20, 0.31])
         self.declare_parameter('approach_dz', 0.15)
         self.declare_parameter('lift_dz', 0.10)
-        self.declare_parameter('ee.orientation_xyzw', [0.0, 0.0, 0.0, 1.0])
+        self.declare_parameter('ee.orientation_xyzw', [1.0, 0.0, 0.0, 0.0])
 
         # Interfaces (share the same Node)
         self.mpi = MotionPlanningInterface(
@@ -173,6 +173,7 @@ class PickNode(Node):
             orientation_xyzw=ori_xyzw,
             execute_immediately=True,
         )
+        return
 
         log('Descend to grasp...')
         await self.mpi.plan_to_ee_pose_async(
