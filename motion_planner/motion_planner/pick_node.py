@@ -88,10 +88,8 @@ class PickNode(Node):
         """
         return self.mpi.scene.n_subscribers() >= 1
 
-    async def _republish_scene_burst(
+    def _republish_scene(
         self,
-        repeats: int = 5,
-        interval_sec: float = 0.25,
     ) -> None:
         """Re-publish collision objects to avoid race conditions."""
         table_lwh = tuple(self.get_parameter('table.size').value)
@@ -101,18 +99,10 @@ class PickNode(Node):
         obs_lwh = tuple(self.get_parameter('obstacle.size').value)
         obs_xyz = tuple(self.get_parameter('obstacle.xyz').value)
 
-        for i in range(repeats):
-            # Deterministic IDs; repeated ADDs are idempotent for same id.
-            self.scene.add_box('table', table_lwh, table_xyz)
-            self.scene.add_box('target_obj', obj_lwh, obj_xyz)
-            self.scene.add_box('obstacle', obs_lwh, obs_xyz)
-            self.get_logger().info(
-                f'Published planning scene burst {i + 1}/{repeats}'
-            )
-            await asyncio.sleep(interval_sec)
-
-        self._scene_bootstrapped = True
-        self.get_logger().info('Planning scene bootstrapped.')
+        # Deterministic IDs; repeated ADDs are idempotent for same id.
+        self.scene.add_box('table', table_lwh, table_xyz)
+        self.scene.add_box('target_obj', obj_lwh, obj_xyz)
+        self.scene.add_box('obstacle', obs_lwh, obs_xyz)
 
     def _try_bootstrap_scene(self) -> None:
         """Timer: once move_group is up, publish the scene repeatedly once."""
@@ -126,9 +116,9 @@ class PickNode(Node):
         self.get_logger().info(
             'move_group is ready. Bootstrapping planning scene...'
         )
-        asyncio.create_task(
-            self._republish_scene_burst(repeats=8, interval_sec=0.2)
-        )
+        self._republish_scene()
+        self._scene_bootstrapped = True
+        self.get_logger().info('Planning scene bootstrapped.')
 
     # ---------- pick workflow ----------
 
@@ -142,7 +132,7 @@ class PickNode(Node):
             await asyncio.sleep(0.05)
         if not self._scene_bootstrapped:
             # As a last resort, republish a short burst synchronously.
-            await self._republish_scene_burst(repeats=3, interval_sec=0.2)
+            self._republish_scene()
 
         obj_xyz: tuple[float, float, float] = tuple(
             self.get_parameter('object.xyz').value  # type: ignore

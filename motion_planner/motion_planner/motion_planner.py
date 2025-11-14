@@ -4,7 +4,6 @@ import asyncio
 import threading
 
 from geometry_msgs.msg import Pose, PoseStamped, Quaternion
-from motion_planner import planning_scene, robot_state
 from motion_planner.robot_state import RobotState as RS
 from moveit_msgs.action import MoveGroup
 from moveit_msgs.msg import (
@@ -41,12 +40,11 @@ class MotionPlanner:
     def __init__(
         self,
         node: Node,
-        robot_state: robot_state.RobotState,
-        planning_scene: planning_scene.PlanningScene,
+        robot_state: RS,
     ):
         """Initialize the motion planner node."""
         self._node = node
-        self.robot_state = RS(node)
+        self._robot_state = robot_state
         self._cbgroup = MutuallyExclusiveCallbackGroup()
         self._c_move_group = ActionClient(
             node, MoveGroup, '/move_action', callback_group=self._cbgroup
@@ -356,7 +354,7 @@ class MotionPlanner:
             msg.pose.orientation.y = start_ee_pose[4]
             msg.pose.orientation.z = start_ee_pose[5]
             msg.pose.orientation.w = start_ee_pose[6]
-            start_joint_state = self.robot_state.inverse_kinematics(msg)
+            start_joint_state = self._robot_state.inverse_kinematics(msg)
             if start_joint_state is None:
                 return None
 
@@ -615,9 +613,8 @@ def main():
     """Run main."""
     rclpy.init()
     node = rclpy.create_node('test_motion_planner_node')
-    rstate = robot_state.RobotState(node)
-    scene = planning_scene.PlanningScene(node)
-    planner = MotionPlanner(node, rstate, scene)
+    rstate = RS(node)
+    planner = MotionPlanner(node, rstate)
     executor = MultiThreadedExecutor()
     executor.add_node(node)
     executor_thread = threading.Thread(target=executor.spin, daemon=True)
