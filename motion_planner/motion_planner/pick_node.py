@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import asyncio
 import threading
-import time
 
 from motion_planner.motion_planning_interface import MotionPlanningInterface
 from motion_planner.planning_scene import PlanningScene
@@ -89,7 +88,7 @@ class PickNode(Node):
         """
         return self.mpi.scene.n_subscribers() >= 1
 
-    def _republish_scene_burst(
+    async def _republish_scene_burst(
         self,
         repeats: int = 5,
         interval_sec: float = 0.25,
@@ -110,7 +109,10 @@ class PickNode(Node):
             self.get_logger().info(
                 f'Published planning scene burst {i + 1}/{repeats}'
             )
-            time.sleep(interval_sec)
+            await asyncio.sleep(interval_sec)
+
+        self._scene_bootstrapped = True
+        self.get_logger().info('Planning scene bootstrapped.')
 
     def _try_bootstrap_scene(self) -> None:
         """Timer: once move_group is up, publish the scene repeatedly once."""
@@ -124,9 +126,9 @@ class PickNode(Node):
         self.get_logger().info(
             'move_group is ready. Bootstrapping planning scene...'
         )
-        self._republish_scene_burst(repeats=8, interval_sec=0.2)
-        self._scene_bootstrapped = True
-        self.get_logger().info('Planning scene bootstrapped.')
+        asyncio.create_task(
+            self._republish_scene_burst(repeats=8, interval_sec=0.2)
+        )
 
     # ---------- pick workflow ----------
 
@@ -140,7 +142,7 @@ class PickNode(Node):
             await asyncio.sleep(0.05)
         if not self._scene_bootstrapped:
             # As a last resort, republish a short burst synchronously.
-            self._republish_scene_burst(repeats=3, interval_sec=0.2)
+            await self._republish_scene_burst(repeats=3, interval_sec=0.2)
 
         obj_xyz: tuple[float, float, float] = tuple(
             self.get_parameter('object.xyz').value  # type: ignore
