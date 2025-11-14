@@ -1,10 +1,11 @@
 """Integration test launchfile for motion planner."""
 
-from moveit_configs_utils import MoveItConfigsBuilder
 from launch import LaunchDescription
+from launch.substitutions import PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
-from launch.substitutions import PathJoinSubstitution
+
+from moveit_configs_utils import MoveItConfigsBuilder
 
 
 def generate_launch_description():

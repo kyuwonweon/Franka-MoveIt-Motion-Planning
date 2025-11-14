@@ -1,34 +1,35 @@
 """Plan motion of the robot."""
 
+import asyncio
+import threading
+
+from geometry_msgs.msg import Pose, PoseStamped, Quaternion
+from motion_planner import planning_scene, robot_state
+from motion_planner.robot_state import RobotState as RS
+from moveit_msgs.action import MoveGroup
+from moveit_msgs.msg import (
+    BoundingVolume,
+    Constraints,
+    JointConstraint,
+    MotionPlanRequest,
+    OrientationConstraint,
+    PlanningOptions,
+    PositionConstraint,
+    RobotState,
+    RobotTrajectory,
+)
+from moveit_msgs.srv import GetCartesianPath
 import numpy as np
+
 import rclpy
-from rclpy.node import Node
 from rclpy.action import ActionClient
 from rclpy.action.client import ClientGoalHandle
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
-from moveit_msgs.action import MoveGroup
-from moveit_msgs.msg import (
-    MotionPlanRequest,
-    RobotState,
-    Constraints,
-    PositionConstraint,
-    OrientationConstraint,
-    PlanningOptions,
-    RobotTrajectory,
-    BoundingVolume,
-)
-from motion_planner.robot_state import RobotState as RS
-from moveit_msgs.srv import GetCartesianPath
-from moveit_msgs.msg import JointConstraint
-from geometry_msgs.msg import Pose, Quaternion, PoseStamped
-from trajectory_msgs.msg import JointTrajectoryPoint
+from rclpy.node import Node
 from shape_msgs.msg import SolidPrimitive
-import asyncio
-import threading
+from trajectory_msgs.msg import JointTrajectoryPoint
 import yaml
-
-from motion_planner import robot_state, planning_scene
 
 
 class MotionPlanner:
@@ -93,15 +94,16 @@ class MotionPlanner:
         Move from a specified end-effector configuration to another.
 
         Args:
-            goal_ee_position (np.ndarray): end EE position [x,y,z]. If not
-            specified, any position is allowed such that the given orientation
-            is achieved.
-            goal_ee_orientation (np.ndarray): end EE position [x,y,z,w]-
-            quaternion.If not specified, any orientation is allowed such that
-            the given position is achieved.
-            start_joints (np.ndarray): array of joint angles for each joint.
-            If not given, use current robot pose as start.
-            execute_immediately (bool): immediately execute the pat
+        ----
+        goal_ee_position (np.ndarray): end EE position [x,y,z]. If not
+              specified, any position is allowed such that the given
+              orientation is achieved.
+        goal_ee_orientation (np.ndarray): end EE orientation [x,y,z,w]
+              quaternion. If not specified, any orientation is allowed
+              such that the given position is achieved.
+        start_joints (np.ndarray): array of joint angles for each joint.
+              If not given, use current robot pose as start.
+        execute_immediately (bool): immediately execute the path.
 
         """
         if goal_ee_orientation is None and goal_ee_position is None:
@@ -191,10 +193,11 @@ class MotionPlanner:
         Move from a specified configuration in joint space to another.
 
         Args:
-            start_joints (np.ndarray): array of joint angles for each joint.
+        ----
+        start_joints (np.ndarray): array of joint angles for each joint.
             If not given, use current robot pose as start.
-            goal_joints (np.ndarray): array of joint angles for each joint
-            execute_immediately (bool): immediately execute the path
+        goal_joints (np.ndarray): array of joint angles for each joint.
+        execute_immediately (bool): immediately execute the path.
 
         """
         goal_msg = MoveGroup.Goal()
@@ -238,16 +241,18 @@ class MotionPlanner:
         """
         Plan a Cartesian path from any valid starting pose to a goal pose.
 
-        Uses moveit_msgs/GetCartesianPath Service
+        Uses moveit_msgs/GetCartesianPath Service.
 
         Args:
-            goal_ee_pose (np.ndarray): destination pose [x,y,z,x,y,z,w]
-            start_ee_pose (np.ndarray): start pose [x,y,z,x,y,z,w].
-            If not provided, use current robot pose as start pose.
-            execute_immediately (bool): immediately execute the path
+        ----
+        goal_ee_pose (np.ndarray): destination pose [x,y,z,x,y,z,w]
+        start_ee_pose (np.ndarray): start pose [x,y,z,x,y,z,w].
+        If not provided, use current robot pose as start pose.
+        execute_immediately (bool): immediately execute the path.
 
-        Returns:
-            GetCartesianPath_Response: response of moveit GetCartesianPath srv
+        Return:
+        ------
+            GetCartesianPath_Response: response of moveit GetCartesianPath srv.
 
         """
         request = GetCartesianPath.Request()
@@ -293,13 +298,15 @@ class MotionPlanner:
         https://docs.ros.org/en/jade/api/moveit_commander/html/classmoveit__commander_1_1move__group_1_1MoveGroupCommander.html#af9c9fc79be7fee5c366102db427fb28b
 
         Args:
-            named_config (str): Named configuration
-            start_ee_pose (np.ndarray, optional): start pose; if None, use
-                current robot pose.
-            execute_immediately (bool): immediately execute the path
+        ----
+        named_config (str): Named configuration.
+        start_ee_pose (np.ndarray, optional): start pose;
+            if None, use current robot pose.
+        execute_immediately (bool): immediately execute the path.
 
-        Returns:
-            MoveGroup.Result: TODO figure out
+        Return:
+        ------
+            MoveGroup.Result: Result of the move action.
 
         """
         goal_msg = MoveGroup.Goal()
@@ -436,8 +443,9 @@ class MotionPlanner:
         Open and close the gripper.
 
         Args:
-            offset(float): offset of each fingers from origin
-            execute_immediately (bool): immediately execute the path
+        ----
+        offset (float): Offset of each fingers from origin.
+        execute_immediately (bool): Immediately execute the path.
 
         """
         goal_msg = MoveGroup.Goal()
@@ -483,8 +491,9 @@ class MotionPlanner:
         Save planned trajectory.
 
         Args:
-            trajectory (moveit_msgs/RobotTrajectory): Trajectory to be saved.
-            file_path (str) : path to where the yaml file will be saved.
+        ----
+        trajectory (moveit_msgs/RobotTrajectory): Trajectory to be saved.
+        file_path (str): Path to where the yaml file will be saved.
 
         """
         data = {
@@ -514,7 +523,8 @@ class MotionPlanner:
         Open saved planned trajectory for inspection.
 
         Args:
-            file_path (str): path to the saved file.
+        ----
+        file_path (str): Path to the saved file.
 
         """
         with open(file_path, 'r') as f:

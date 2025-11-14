@@ -1,12 +1,27 @@
-"""MotionPlanningInterface class."""
+"""
+MotionPlanningInterface class.
+
+Parameters
+----------
+    + base_link (str): Robot base link frame.
+        - The reference frame for the robot.
+    + ee_link (str): Robot end-effector link frame.
+        - The end-effector link for the robot.
+    + planning_group (str): MoveIt planning group name.
+        - Defines which set of joints and links to consider.
+    + planning_scene_topic (str): Topic for planning scene updates.
+        - Topic to publish planning scene updates.
+
+"""
 
 from typing import Optional
-import numpy as np
-from rclpy.node import Node
 
-from motion_planner.robot_state import RobotState
-from motion_planner.planning_scene import PlanningScene
 from motion_planner.motion_planner import MotionPlanner
+from motion_planner.planning_scene import PlanningScene
+from motion_planner.robot_state import RobotState
+import numpy as np
+
+from rclpy.node import Node
 
 
 class MotionPlanningInterface:
