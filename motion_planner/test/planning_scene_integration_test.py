@@ -1,5 +1,6 @@
 """Test planning scene."""
 
+####################### Begin_Citation [3] ######################  # noqa: E266
 import os
 import time
 import numpy as np
@@ -137,3 +138,6 @@ def test_move_into_block():
         executor.shutdown()
         executor_thread.join(timeout=1.0)
         rclpy.shutdown()
+
+
+######################### End_Citation [3] ######################  # noqa: E266

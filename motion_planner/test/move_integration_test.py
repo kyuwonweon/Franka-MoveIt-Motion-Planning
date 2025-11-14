@@ -1,5 +1,6 @@
 """Move the robot from one pose to another."""
 
+####################### Begin_Citation [3] ######################  # noqa: E266
 import os
 import time
 import math
@@ -71,7 +72,7 @@ def _ori_err(q_target: np.ndarray, q_actual: np.ndarray) -> float:
 
 
 def _quat_multiply(q1: np.ndarray, q2: np.ndarray) -> np.ndarray:
-    """Hamilton product q = q1 * q2, both in [x, y, z, w] format."""
+    """Calculate Hamilton quaterion product q = q1 * q2."""
     x1, y1, z1, w1 = q1
     x2, y2, z2, w2 = q2
     x = w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2
@@ -168,3 +169,6 @@ def test_move_pose_to_pose():
         executor.shutdown()
         executor_thread.join(timeout=1.0)
         rclpy.shutdown()
+
+
+####################### End_Citation [3] ######################  # noqa: E266
