@@ -124,6 +124,7 @@ class PlanningScene:
 
         self._obj_cache.pop(name)
 
+    # ---------------- Begin_Citation [5] ----------------
     def attach_box(
         self,
         name: str,
@@ -140,7 +141,6 @@ class PlanningScene:
         co.header.frame_id = self._world_frame
         co.id = name
         co.operation = CollisionObject.REMOVE
-
         scene = PS()
         scene.is_diff = True
         scene.robot_state.is_diff = True
@@ -166,6 +166,7 @@ class PlanningScene:
         scene.world.collision_objects = [co]
         self._scene_pub.publish(scene)
 
+    # ---------------- End_Citation [5] ----------------
     def load_scene(self, params: Dict) -> None:
         """Load a planning scene from parameters."""
         for box in params.get('boxes', []):
