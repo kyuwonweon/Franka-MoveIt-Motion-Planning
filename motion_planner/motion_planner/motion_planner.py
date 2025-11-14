@@ -5,18 +5,18 @@ import threading
 
 from geometry_msgs.msg import Pose, PoseStamped, Quaternion
 from motion_planner.robot_state import RobotState as RS
-from moveit_msgs.action import MoveGroup, ExecuteTrajectory
+from moveit_msgs.action import ExecuteTrajectory, MoveGroup
 from moveit_msgs.msg import (
     BoundingVolume,
     Constraints,
     JointConstraint,
     MotionPlanRequest,
+    MoveItErrorCodes,
     OrientationConstraint,
     PlanningOptions,
     PositionConstraint,
     RobotState,
     RobotTrajectory,
-    MoveItErrorCodes,
 )
 from moveit_msgs.srv import GetCartesianPath
 import numpy as np
