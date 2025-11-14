@@ -2,9 +2,9 @@
 
 from time import sleep
 
-import rclpy
-
 from motion_planner.planning_scene import PlanningScene
+
+import rclpy
 
 
 def main():

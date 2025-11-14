@@ -15,15 +15,16 @@ import asyncio
 import threading
 import time
 
+from motion_planner.motion_planning_interface import MotionPlanningInterface
+from motion_planner.planning_scene import PlanningScene
 import numpy as np
+
 import rclpy
 from rclpy.duration import Duration
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from std_srvs.srv import Trigger
 
-from motion_planner.motion_planning_interface import MotionPlanningInterface
-from motion_planner.planning_scene import PlanningScene
 
 # Optional service type import (only for readiness check)
 
