@@ -1,3 +1,4 @@
+<!-- ==================== Begin Citation [4] ==================== -->
 <launch>
   <arg name="demo" default="true"/>
   <let name="rviz_config" value="rviz/franka_live_config.rviz"/>
@@ -36,3 +37,4 @@
     <param name="ee.orientation_xyzw" value="$(var ee_orientation)"/>
   </node>
 </launch>
+<!-- ==================== End Citation [4] ==================== -->

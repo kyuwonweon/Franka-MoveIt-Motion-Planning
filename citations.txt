@@ -5,3 +5,4 @@
 [1] https://chatgpt.com/share/690facec-b33c-800a-a92a-03847f09fa40
 [2] https://chatgpt.com/share/691271d5-992c-8003-832a-32add0c9d6d3 >> asyncio for motion plan test
 [3] https://chatgpt.com/share/69163e04-d29c-8010-9145-637c9fe53f92 >> structure of integration tests
+[4] https://chatgpt.com/share/691686a1-f2f8-8010-abc4-f4d5035a02da >> early versions of pickplace.launch.xml and pick_node.py

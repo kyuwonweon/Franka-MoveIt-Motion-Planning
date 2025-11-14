@@ -1,5 +1,6 @@
 """Test planning scene."""
 
+####################### Begin_Citation [3] ######################  # noqa: E266
 import asyncio
 import os
 import threading
@@ -138,3 +139,6 @@ def test_move_into_block():
         executor.shutdown()
         executor_thread.join(timeout=1.0)
         rclpy.shutdown()
+
+
+######################### End_Citation [3] ######################  # noqa: E266
