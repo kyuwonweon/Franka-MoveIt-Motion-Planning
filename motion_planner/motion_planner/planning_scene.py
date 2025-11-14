@@ -1,13 +1,29 @@
-"""Planning scene wrapper. TODO: improve docstrings."""
+"""
+Planning scene wrapper.
+
+Publishers
+----------
+    + /planning_scene (moveit_msgs/PlanningScene)
+        - Publishes updates to the planning scene.
+
+Parameters
+----------
+    + world_frame (str): World reference frame.
+        - The reference frame for the planning scene.
+    + planning_scene_topic (str): Topic for planning scene updates.
+        - Topic to publish planning scene updates.
+    + ee_link (str): Robot end-effector link frame.
+        - The end-effector link for the robot.
+
+"""
 
 from typing import Dict, Tuple
 
-from rclpy.node import Node
-
 from geometry_msgs.msg import PoseStamped
-from shape_msgs.msg import SolidPrimitive
-from moveit_msgs.msg import CollisionObject, AttachedCollisionObject
+from moveit_msgs.msg import AttachedCollisionObject, CollisionObject
 from moveit_msgs.msg import PlanningScene as PS
+from rclpy.node import Node
+from shape_msgs.msg import SolidPrimitive
 
 
 class PlanningScene:

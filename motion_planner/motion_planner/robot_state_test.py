@@ -1,25 +1,26 @@
 """Test RobotState functionality."""
 
-import math
 from typing import Optional
 
-import rclpy
 from geometry_msgs.msg import PoseStamped
+from motion_planner.robot_state import RobotState
+import numpy as np
+
+import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import JointState
 
-from motion_planner.robot_state import RobotState
-
 
 def _pose_dist(a: PoseStamped, b: PoseStamped) -> float:
+    """Compute distance between two PoseStamped positions."""
     dx = a.pose.position.x - b.pose.position.x
     dy = a.pose.position.y - b.pose.position.y
     dz = a.pose.position.z - b.pose.position.z
-    return math.sqrt(dx * dx + dy * dy + dz * dz)
+    return float(np.sqrt(dx * dx + dy * dy + dz * dz))
 
 
 class RobotStateTest(Node):
-    """Test node that logs RobotState once a second."""
+    """Test node that logs RobotState every second."""
 
     def __init__(self) -> None:
         """Initialize RobotState and create timer to test it."""

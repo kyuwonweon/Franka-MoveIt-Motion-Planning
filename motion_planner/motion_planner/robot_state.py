@@ -1,12 +1,36 @@
-"""Robot state class. TODO better docs."""
+"""
+Keeps track of the robot's state.
+
+Subscriptions
+-------------
+    + /joint_states (sensor_msgs/JointState)
+        - Current robot joint states.
+
+Clients
+-------
+    + /compute_fk (moveit_msgs/GetPositionFK)
+      - Service client for forward kinematics.
+    + /compute_ik (moveit_msgs/GetPositionIK)
+      - Service client for inverse kinematics.
+
+Parameters
+----------
+    + planning_group (str): MoveIt planning group name.
+        - Defines which set of joints and links to consider.
+    + base_link (str): Robot base link frame.
+        - The reference frame for the robot.
+    + ee_link (str): Robot end-effector link frame.
+        - The end-effector link for the robot.
+
+"""
 
 from typing import List, Optional
 
-import rclpy
 from builtin_interfaces.msg import Duration
 from geometry_msgs.msg import PoseStamped
 from moveit_msgs.msg import RobotState as MoveItRobotState
 from moveit_msgs.srv import GetPositionFK, GetPositionIK
+import rclpy
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.node import Node
 from sensor_msgs.msg import JointState
