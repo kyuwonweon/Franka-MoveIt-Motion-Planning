@@ -573,6 +573,8 @@ class MotionPlanner:
 
 
 # ---------------- Begin_Citation [2] ----------------
+
+
 async def integration_test(node: Node, planner: MotionPlanner) -> None:
     """Test move plan functions."""
     logger = node.get_logger()
@@ -631,7 +633,9 @@ async def integration_test(node: Node, planner: MotionPlanner) -> None:
 
     finally:
         node.get_logger().info('Integration test finished.')
-    # ---------------- End_Citation [2] ----------------
+
+
+# ---------------- End_Citation [2] ----------------
 
 
 def main():

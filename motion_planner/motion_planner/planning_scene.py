@@ -124,7 +124,7 @@ class PlanningScene:
 
         self._obj_cache.pop(name)
 
-    ######################### End_Citation [5] ######################
+    # ---------------- Begin_Citation [5] ----------------
     def attach_box(
         self,
         name: str,
@@ -166,8 +166,7 @@ class PlanningScene:
         scene.world.collision_objects = [co]
         self._scene_pub.publish(scene)
 
-    ######################### End_Citation [5] ######################
-
+    # ---------------- End_Citation [5] ----------------
     def load_scene(self, params: Dict) -> None:
         """Load a planning scene from parameters."""
         for box in params.get('boxes', []):

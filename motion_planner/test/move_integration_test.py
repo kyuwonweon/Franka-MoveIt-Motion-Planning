@@ -1,6 +1,6 @@
 """Move the robot from one pose to another."""
 
-####################### Begin_Citation [3] ######################  # noqa: E266
+# ---------------- Begin_Citation [3] ----------------  # noqa: E266
 import asyncio
 import math
 import os
@@ -169,4 +169,4 @@ def test_move_pose_to_pose():
         rclpy.shutdown()
 
 
-####################### End_Citation [3] ######################  # noqa: E266
+# ---------------- End_Citation [3] ----------------  # noqa: E266
