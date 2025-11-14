@@ -102,15 +102,31 @@ class PickNode(Node):
         obs_lwh = tuple(self.get_parameter('obstacle.size').value)
         obs_xyz = tuple(self.get_parameter('obstacle.xyz').value)
 
+        scene_params = {
+            'boxes': [
+                {
+                    'name': 'table',
+                    'lwh': table_lwh,
+                    'xyz': table_xyz,
+                },
+                {
+                    'name': 'target_obj',
+                    'lwh': obj_lwh,
+                    'xyz': obj_xyz,
+                },
+                {
+                    'name': 'obstacle',
+                    'lwh': obs_lwh,
+                    'xyz': obs_xyz,
+                },
+            ]
+        }
         for i in range(repeats):
-            # Deterministic IDs; repeated ADDs are idempotent for same id.
-            self.scene.add_box('table', table_lwh, table_xyz)
-            self.scene.add_box('target_obj', obj_lwh, obj_xyz)
-            self.scene.add_box('obstacle', obs_lwh, obs_xyz)
+            self.scene.load_scene(scene_params)
             self.get_logger().info(
                 f'Published planning scene burst {i + 1}/{repeats}'
             )
-            time.sleep(interval_sec)
+        time.sleep(interval_sec)
 
     def _try_bootstrap_scene(self) -> None:
         """Timer: once move_group is up, publish the scene repeatedly once."""
