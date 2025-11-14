@@ -119,16 +119,7 @@ class PickNode(Node):
                 },
             ]
         }
-        repeats = 8
-        import time
-
-        interval_sec = 0.2
-        for i in range(repeats):
-            self.scene.load_scene(scene_params)
-            self.get_logger().info(
-                f'Published planning scene burst {i + 1}/{repeats}'
-            )
-            time.sleep(interval_sec)
+        self.scene.load_scene(scene_params)
 
     def _try_bootstrap_scene(self) -> None:
         """Timer: once move_group is up, publish the scene repeatedly once."""
