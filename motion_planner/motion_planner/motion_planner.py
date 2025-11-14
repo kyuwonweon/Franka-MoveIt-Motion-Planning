@@ -4,14 +4,14 @@ import asyncio
 import threading
 
 from geometry_msgs.msg import Pose, PoseStamped, Quaternion
-from motion_planner import planning_scene, robot_state
 from motion_planner.robot_state import RobotState as RS
-from moveit_msgs.action import MoveGroup
+from moveit_msgs.action import ExecuteTrajectory, MoveGroup
 from moveit_msgs.msg import (
     BoundingVolume,
     Constraints,
     JointConstraint,
     MotionPlanRequest,
+    MoveItErrorCodes,
     OrientationConstraint,
     PlanningOptions,
     PositionConstraint,
@@ -41,15 +41,20 @@ class MotionPlanner:
     def __init__(
         self,
         node: Node,
-        robot_state: robot_state.RobotState,
-        planning_scene: planning_scene.PlanningScene,
+        robot_state: RS,
     ):
         """Initialize the motion planner node."""
         self._node = node
-        self.robot_state = RS(node)
+        self._robot_state = robot_state
         self._cbgroup = MutuallyExclusiveCallbackGroup()
         self._c_move_group = ActionClient(
             node, MoveGroup, '/move_action', callback_group=self._cbgroup
+        )
+        self._c_execute_trajectory = ActionClient(
+            node,
+            ExecuteTrajectory,
+            '/execute_trajectory',
+            callback_group=self._cbgroup,
         )
         self._logger = node.get_logger()
         self._c_cartesian_path = self._node.create_client(
@@ -279,8 +284,29 @@ class MotionPlanner:
             self._logger.warn('Still waiting for service')
 
         self._logger.info('Request Cartesian path from service')
-        response = await self._c_cartesian_path.call_async(request)
+        response = await self._c_cartesian_path.call_async(request)  # type: ignore
 
+        if execute_immediately:
+            # check that we successfully planned
+            if response is None:
+                self._logger.error(
+                    'Cannot execute trajectory--response was None'
+                )
+            response: GetCartesianPath.Response
+            if response.error_code.val != MoveItErrorCodes.SUCCESS:
+                self._logger.error(
+                    f'Cannot execute trajectory ({response.error_code})'
+                )
+
+            # execute the cartesian path
+            request = ExecuteTrajectory.Goal()
+            request.trajectory = response.solution
+            resp = await self._c_execute_trajectory.send_goal_async(request)
+            if resp is not None and resp.accepted:
+                await resp.get_result_async()
+                self._logger.info('Cartesian path execution complete!')
+            else:
+                self._logger.error('Failed to execute cartesian path.')
         return response  # type: ignore
 
     async def plan_to_named_config(
@@ -356,7 +382,7 @@ class MotionPlanner:
             msg.pose.orientation.y = start_ee_pose[4]
             msg.pose.orientation.z = start_ee_pose[5]
             msg.pose.orientation.w = start_ee_pose[6]
-            start_joint_state = self.robot_state.inverse_kinematics(msg)
+            start_joint_state = self._robot_state.inverse_kinematics(msg)
             if start_joint_state is None:
                 return None
 
@@ -516,7 +542,7 @@ class MotionPlanner:
 
         with open(file_path, 'w') as f:
             yaml.dump(data, f)
-        self.node.get_logger().info(f'Trajectory saved to {file_path}')
+        self._node.get_logger().info(f'Trajectory saved to {file_path}')
 
     def load_plan(self, file_path: str) -> RobotTrajectory:
         """
@@ -542,7 +568,7 @@ class MotionPlanner:
             p.time_from_start.nanosec = pt['time_from_start']['nanosec']
             traj.joint_trajectory.points.append(p)
 
-        self.node.get_logger().info(f'Loaded trajectory from {file_path}')
+        self._node.get_logger().info(f'Loaded trajectory from {file_path}')
         return traj
 
 
@@ -551,8 +577,8 @@ async def integration_test(node: Node, planner: MotionPlanner) -> None:
     logger = node.get_logger()
     try:
         planner.check_services_up()
-        logger.info('Service is ready. Waiting 5sec...')
-        await asyncio.sleep(5.0)
+        logger.info('Service is ready. Waiting 3sec...')
+        await asyncio.sleep(3.0)
 
         # Test for joint state movement
         pos1 = np.zeros(7)
@@ -579,15 +605,11 @@ async def integration_test(node: Node, planner: MotionPlanner) -> None:
 
         # Test for cartesian path
         # from ros2 param get /move_group robot_description_semantic - ready
-        start_joints_pose = np.array(
-            [0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785]
-        )
         cartesian_goal_pose = np.array(
-            [0.0, 0, 0.0, -2.356, 0.0, 1.571, 0.785]
+            [0.0, 0.2, 0.2, -2.356, 0.0, 1.571, 0.785]
         )
         response = await planner.plan_cartesian_path(
             goal_ee_pose=cartesian_goal_pose,
-            start_ee_pose=start_joints_pose,
             execute_immediately=True,
         )
         node.get_logger().info(
@@ -595,12 +617,11 @@ async def integration_test(node: Node, planner: MotionPlanner) -> None:
             f'Fraction of path found: {response.fraction}'
         )
 
-        resp = await planner.plan_to_named_config(
+        await planner.plan_to_named_config(
             named_config='extended',
             start_ee_pose=None,
             execute_immediately=True,
         )
-        logger.info(f'NAMED CONFIG RESPONSE: {resp}')
 
         # Test gripper open/close
         await planner.gripper(offset=0.03, execute_immediately=True)
@@ -615,9 +636,8 @@ def main():
     """Run main."""
     rclpy.init()
     node = rclpy.create_node('test_motion_planner_node')
-    rstate = robot_state.RobotState(node)
-    scene = planning_scene.PlanningScene(node)
-    planner = MotionPlanner(node, rstate, scene)
+    rstate = RS(node)
+    planner = MotionPlanner(node, rstate)
     executor = MultiThreadedExecutor()
     executor.add_node(node)
     executor_thread = threading.Thread(target=executor.spin, daemon=True)
