@@ -1,4 +1,4 @@
-# ME495 Embedded Systems Homework 3 Part 2
+# Franka Motion Planning 
 Authors: Conor Hayes, Kyuwon Weon, Amber Handal, Tianhao Zhang
 
 This ROS 2 package demonstrates autonomous pick-and-place motion planning for a Franka Emika Panda robotic arm using MoveIt 2. In the RViz simulation, the robot detects and avoids a fixed obstacle on a table, approaches a rectangular object, grasps it with its gripper, and places it on the opposite side without collisions.
